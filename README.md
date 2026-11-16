@@ -41,7 +41,7 @@ npm run dev
 
 | 路线 | 做什么 | 依赖 |
 |---|---|---|
-| **部件优先生成**（`parts_first`，主路线） | 原图识别部件 → PartCrafter 按部件联合生成 → 闭合/对应审计 → 输出带部件身份的 GLB | `.venv-sam2`、`.venv-parts`、`.venv-hunyuan`，权重；建议 ≥12 GB 显存 |
+| **部件优先生成**（`parts_first`，主路线） | 原图识别部件 → **用户确认/修正部件清单** → PartCrafter 按部件联合生成 → 闭合/对应审计 → 输出带部件身份的 GLB | `.venv-sam2`、`.venv-parts`、`.venv-hunyuan`，权重；建议 ≥12 GB 显存 |
 | 本地自动生成（`local`） | TripoSR 或 Hunyuan3D-2mini 生成整体网格，可再在编辑器里拆分 | `.venv-3d` / `.venv-hunyuan` |
 | 手动结构工具（`template`） | 按参数搭建置物架、桌、柜 | 无 |
 | 对话看图建模（`assistant`） | 等待对话中的助手写 Blender 模型后导入 | Blender |
@@ -65,7 +65,13 @@ npm run dev
 
 ## 测试
 
-全部 Python 测试：缺少可选依赖或资产的用例会自动跳过。
+每次推送都会由 GitHub Actions（`.github/workflows/ci.yml`）运行下面全部检查。
+
+全部 Python 测试：需先 `npm ci`，GLB 完整校验会用到其中的 gltf-validator；缺少可选依赖或资产的用例会自动跳过。
+
+```bash
+pip install -r requirements-dev.txt
+```
 
 ```bash
 python -m pytest
@@ -99,7 +105,7 @@ npm run format
 
 - 上传、框选和擦除、目标检测、SAM 2 分割、TripoSR / Hunyuan 整体生成、GLB 校验、审核、下载、任务恢复和取消。
 - 后期编辑：部件分组、换材质、UV、减面、单部件重生成。
-- 部件优先一键任务：编排、门槛、取消和界面都已测试，用假 worker 与真实子进程验证。
+- 部件优先一键任务：识别后暂停，让用户确认或修正部件清单（可关闭）；服务重启后从已确认的规划继续。编排、门槛、取消和界面都已测试，用假 worker 与真实子进程验证。
 
 **尚未完成：**
 

@@ -1,0 +1,19 @@
+# Tests and lint (CI and local). Matches the CPU geometry stack used by the workers;
+# no torch/CUDA — tests that need them skip.
+-r requirements.txt
+pytest>=8,<10
+ruff==0.17.5
+numpy>=1.26,<3
+scipy>=1.11,<2
+trimesh>=4.5,<5
+networkx>=3,<4
+scikit-image>=0.22,<0.27
+shapely>=2.0,<3
+rtree>=1.4,<2
+pygltflib>=1.16,<2
+opencv-python-headless>=4.8,<6
+pymeshlab==2023.12.post3
+manifold3d==3.5.5
+mapbox-earcut>=2.0,<3
+libigl==2.6.1
+xatlas==0.0.11

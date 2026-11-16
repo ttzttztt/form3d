@@ -42,6 +42,7 @@
 | 阶段 | Worker | 运行环境 | 门槛 |
 |---|---|---|---|
 | 1. 原图部件规划 | `services/workers/plan_assembly_from_photo.py`（Grounding DINO Tiny + SAM 2.1 Tiny） | `.venv-sam2`，占用 GPU | 计划状态必须为 `planned`，即没有类别冲突且不超过 16 个部件；否则停在 `awaiting_input` 并说明原因 |
+| 1b. 用户确认（默认开启） | 界面显示带编号的叠加图，可以修正类别、去掉部件；`POST /api/jobs/{id}/parts-plan/confirm` | — | 修正后用规划器同一个构建函数重建计划，仍须满足上面的门槛；原始计划保存为 `plan.original.json` |
 | 2. 按部件生成 | `generate_partcrafter.py`（部件数来自第 1 步的计划） | `.venv-parts`，占用 GPU | 每个槽位都要解码出有限网格 |
 | 3. 审计 | `audit_parts_first.py` | `.venv-hunyuan` + `.tools/geometry_extra` | 每个部件闭合、无自交，且与原图部件掩码一一对应；否则停在 `awaiting_input` |
 | 4. 装配导出 | `export_planned_assembly.py` | 同上 | 生成带部件身份、UV、层级的 GLB，并做完整 glTF 校验 |
