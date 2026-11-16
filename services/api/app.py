@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
+from .models import PartsPlanConfirm
 from .models import JobRequest, ReviewRequest, AssetEditRequest, VersionAnnotation, ReferenceViews
 from .models import PartExportRequest, PartPromptRequest, AlternativeRequest, SemanticScanRequest
 from .models import PartReferenceRequest, PartRegenerationRequest, PartSurfaceRepairRequest, PartOptimizationRequest
@@ -48,7 +49,7 @@ from .asset_editor import (
 )
 from .detection import analyze_image, detector_status, DETECTOR_REVISION
 from .local3d import local3d_status
-from .parts_first import parts_first_status
+from .parts_first import confirm_plan, parts_first_status
 from .segmentation import segmentation_status
 from .preflight import preflight_status
 from .pipeline import run_job, write_json
@@ -62,7 +63,10 @@ Image.MAX_IMAGE_PIXELS = 24_000_000
 
 def create_app(data_dir=None):
     store = Store(Path(data_dir or os.environ.get("IMG3D_DATA_DIR", ROOT / ".data")))
-    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="img3d")
+    # Two queues: long GPU/geometry jobs (generation, scans, part repairs can take up to an
+    # hour) must not starve short interactive work such as object detection on upload.
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="img3d-jobs")
+    quick_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="img3d-quick")
 
     @asynccontextmanager
     async def lifespan(application):
@@ -87,7 +91,7 @@ def create_app(data_dir=None):
         for image in store.images():
             if image.get("analysis", {}).get("status") in ("queued", "running"):
                 if detector_status()["available"]:
-                    executor.submit(analyze_image, store, image["id"])
+                    quick_executor.submit(analyze_image, store, image["id"])
                 else:
                     store.update_image(
                         image["id"],
@@ -97,10 +101,12 @@ def create_app(data_dir=None):
                     )
         yield
         executor.shutdown(wait=True, cancel_futures=True)
+        quick_executor.shutdown(wait=True, cancel_futures=True)
 
     app = FastAPI(title="FORM · img_to3D", version="0.1.0", lifespan=lifespan)
     app.state.store = store
     app.state.executor = executor
+    app.state.quick_executor = quick_executor
 
     @app.post("/api/material-presets/{name}/prepare")
     def prepare_example_material(name: str):
@@ -270,7 +276,7 @@ def create_app(data_dir=None):
 
         image = store.update_image(image_id, enqueue)
         if scheduled[0]:
-            executor.submit(analyze_image, store, image_id)
+            quick_executor.submit(analyze_image, store, image_id)
         return image
 
     @app.get("/api/jobs")
@@ -339,7 +345,13 @@ def create_app(data_dir=None):
         find_job(job_id)
 
         def mutate(item):
-            if item["status"] not in ("queued", "running", "awaiting_input", "awaiting_assistant"):
+            if item["status"] not in (
+                "queued",
+                "running",
+                "awaiting_input",
+                "awaiting_assistant",
+                "awaiting_plan_review",
+            ):
                 raise HTTPException(409, "当前状态不能取消")
             item.update(status="cancelled", stage="cancelled")
             item["events"].append(
@@ -347,6 +359,29 @@ def create_app(data_dir=None):
             )
 
         return store.update(job_id, mutate)
+
+    @app.post("/api/jobs/{job_id}/parts-plan/confirm")
+    def confirm_parts_plan(job_id: str, body: PartsPlanConfirm):
+        job = find_job(job_id)
+        if job["status"] != "awaiting_plan_review":
+            raise HTTPException(409, "当前任务不在等待确认部件规划")
+        with edit_locks.setdefault(job_id, threading.Lock()):
+            if store.job(job_id)["status"] != "awaiting_plan_review":
+                raise HTTPException(409, "当前任务不在等待确认部件规划")
+            try:
+                summary = confirm_plan(store.root / "jobs" / job_id, body.remove, body.kinds)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            item = store.event(
+                job_id,
+                "parts_plan_confirmed",
+                f"已确认 {summary['count']} 个部件，排队生成",
+                status="queued",
+                parts_plan=summary,
+                error=None,
+            )
+        executor.submit(run_job, store, job_id)
+        return item
 
     @app.post("/api/jobs/{job_id}/resume")
     def resume(job_id: str):

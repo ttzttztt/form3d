@@ -3,11 +3,11 @@
 import json
 import os
 from pathlib import Path
-import subprocess
 import shutil
 import time
 
 from .gpu import GPU_LOCK
+from .subprocesses import run_worker
 from .provider import Cancelled
 from .segmentation import choose_segmentation, segmentation_python, segmentation_status
 from .preflight import InputNeedsAttention, preflight_python
@@ -81,7 +81,6 @@ def generate_local(
     store.event(job_id, "waiting_gpu", "等待本地显卡空闲")
     while not GPU_LOCK.acquire(timeout=0.25):
         check_cancelled()
-    process = None
     try:
         check_cancelled()
         pipeline_started = time.monotonic()
@@ -122,22 +121,14 @@ def generate_local(
                     "--output",
                     str(directory),
                 ]
-                with (directory / "segmentation.log").open("wb") as log:
-                    process = subprocess.Popen(
-                        segment_command,
-                        stdout=log,
-                        stderr=subprocess.STDOUT,
-                        cwd=str(ROOT),
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                    )
-                    segment_started = time.monotonic()
-                    while process.poll() is None:
-                        check_cancelled()
-                        if time.monotonic() - segment_started > 300:
-                            raise ValueError("SAM 2 分割超过 5 分钟，已停止本次任务")
-                        time.sleep(0.25)
-                check_cancelled()
-                if process.returncode:
+                returncode = run_worker(
+                    segment_command,
+                    directory / "segmentation.log",
+                    timeout=300,
+                    should_stop=check_cancelled,
+                    timeout_message="SAM 2 分割超过 5 分钟，已停止本次任务",
+                )
+                if returncode:
                     raise ValueError("SAM 2 分割失败，未回退到基础去背景；详情见任务 segmentation.log")
                 segmentation_summary = json.loads((directory / "segmentation_summary.json").read_text(encoding="utf-8"))
                 input_path = directory / "segmented.png"
@@ -178,22 +169,14 @@ def generate_local(
             preflight_command.append("--presegmented")
         if not remove_background:
             preflight_command.append("--keep-background")
-        with (directory / "input_preflight.log").open("wb") as log:
-            process = subprocess.Popen(
-                preflight_command,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                cwd=str(ROOT),
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-            preflight_started = time.monotonic()
-            while process.poll() is None:
-                check_cancelled()
-                if time.monotonic() - preflight_started > 300:
-                    raise ValueError("输入清理超过 5 分钟，请查看 input_preflight.log")
-                time.sleep(0.25)
-        check_cancelled()
-        if process.returncode:
+        returncode = run_worker(
+            preflight_command,
+            directory / "input_preflight.log",
+            timeout=300,
+            should_stop=check_cancelled,
+            timeout_message="输入清理超过 5 分钟，请查看 input_preflight.log",
+        )
+        if returncode:
             raise ValueError("输入清理检查失败，未绕过质量检查继续生成；详情见 input_preflight.log")
         input_quality = json.loads((directory / "input_quality.json").read_text(encoding="utf-8"))
         input_path = directory / "cleaned.png"
@@ -209,36 +192,30 @@ def generate_local(
         if input_quality["status"] == "blocked":
             raise InputNeedsAttention("；".join(reason["message"] for reason in input_quality["reasons"]))
 
-        def run_worker(command, log_path, timeout, progress_path=None):
-            nonlocal process
+        def run_stage(command, log_path, timeout, progress_path=None):
             seen = None
-            started = time.monotonic()
-            with log_path.open("wb") as log:
-                process = subprocess.Popen(
-                    command,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    cwd=str(ROOT),
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-                while True:
-                    check_cancelled()
-                    if progress_path:
-                        try:
-                            value = json.loads(progress_path.read_text(encoding="utf-8"))
-                            marker = (value["sequence"], value["stage"])
-                            if marker != seen:
-                                store.event(job_id, value["stage"], value["message"])
-                                seen = marker
-                        except (OSError, ValueError, KeyError):
-                            pass
-                    if process.poll() is not None:
-                        break
-                    if time.monotonic() - started > timeout:
-                        raise ValueError("本地处理超时，已停止本次任务，请查看阶段日志")
-                    time.sleep(0.25)
-                check_cancelled()
-            return process.returncode
+
+            def mirror_progress():
+                nonlocal seen
+                if not progress_path:
+                    return
+                try:
+                    value = json.loads(progress_path.read_text(encoding="utf-8"))
+                    marker = (value["sequence"], value["stage"])
+                    if marker != seen:
+                        store.event(job_id, value["stage"], value["message"])
+                        seen = marker
+                except (OSError, ValueError, KeyError):
+                    pass
+
+            return run_worker(
+                command,
+                log_path,
+                timeout=timeout,
+                should_stop=check_cancelled,
+                on_poll=mirror_progress,
+                timeout_message="本地处理超时，已停止本次任务，请查看阶段日志",
+            )
 
         engines = [engine]
         alternative = "triposr" if engine == "hunyuan-mini" else "hunyuan-mini"
@@ -288,7 +265,7 @@ def generate_local(
             if hunyuan:
                 command += ["--steps", "50" if detail else "30"]
             store.event(job_id, "shape_attempt", "本地生成尝试 %d/%d：%s" % (index, len(engines), candidate_engine))
-            code = run_worker(command, candidate / "local3d.log", 1200, candidate / "local_progress.json")
+            code = run_stage(command, candidate / "local3d.log", 1200, candidate / "local_progress.json")
             item = {
                 "index": index,
                 "engine": candidate_engine,
@@ -315,7 +292,7 @@ def generate_local(
                 "--category",
                 category,
             ]
-            if run_worker(quality_command, candidate / "geometry_check.log", 120):
+            if run_stage(quality_command, candidate / "geometry_check.log", 120):
                 raise ValueError("输出几何检查未能完成，未发布未经检查的候选")
             quality = json.loads((candidate / "geometry_quality.json").read_text(encoding="utf-8"))
             shutil.copyfile(candidate / "geometry_quality.json", directory / "geometry_quality.json")
@@ -359,11 +336,4 @@ def generate_local(
                 time.sleep(0.025 * (attempt + 1))
         return summary
     finally:
-        if process and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=10)
         GPU_LOCK.release()

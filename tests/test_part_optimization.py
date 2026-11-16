@@ -198,7 +198,7 @@ class PartOptimizationTests(unittest.TestCase):
         tasks.cancel_task(self.store, self.job, identity)
         with (
             patch.object(service, "copy_reference_cache", return_value={"cached": True}),
-            patch("services.api.part_regeneration.subprocess.Popen") as process,
+            patch("services.api.subprocesses.subprocess.Popen") as process,
         ):
             service.run_optimization(self.store, self.job["id"], identity)
         process.assert_not_called()

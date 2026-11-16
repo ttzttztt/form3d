@@ -233,7 +233,7 @@ class PartRegenerationTests(unittest.TestCase):
         identity, folder = self.generation()
         service.cancel_task(self.store, self.job, identity)
         with (
-            patch.object(service, "subprocess") as process,
+            patch("services.api.subprocesses.subprocess") as process,
             patch.object(service, "local_python", return_value="mock-python"),
         ):
             service.run_regeneration(self.store, self.job["id"], identity)
@@ -366,7 +366,7 @@ class PartRegenerationTests(unittest.TestCase):
         service.cancel_task(self.store, self.job, identity)
         with (
             patch.object(service, "local_python", return_value="mock-python"),
-            patch.object(service, "subprocess") as process,
+            patch("services.api.subprocesses.subprocess") as process,
         ):
             service.run_surface_repair(self.store, self.job["id"], identity)
         process.Popen.assert_not_called()

@@ -1,6 +1,6 @@
 """Original-photo part regeneration, immutable proposals, explicit exact-byte adoption."""
 
-import hashlib, json, os, re, shutil, subprocess, time, uuid
+import hashlib, json, os, re, shutil, time, uuid
 from pathlib import Path
 from .asset_editor import ROOT, source_for
 from .glb_document import read_glb, parts_catalog
@@ -9,6 +9,7 @@ from .segmentation import segmentation_python, segmentation_status
 from .detection import detector_status
 from .geometry import validate_glb
 from .gpu import GPU_LOCK
+from .subprocesses import last_error, run_worker
 
 
 def digest(path):
@@ -252,47 +253,27 @@ def start_reference(store, job, body, executor):
     return state_result(store, job, identity, True)
 
 
-def stop_child(process):
-    if process.poll() is not None:
-        return
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            capture_output=True,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-    else:
-        process.terminate()
-    try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=10)
-
-
 def run_command(folder, command, timeout, progress=None, cancel_folder=None):
-    if ((cancel_folder or folder) / "cancel_requested").exists():
-        raise ValueError("已取消，原模型保留")
-    with (folder / "worker.log").open("wb") as log:
-        process = subprocess.Popen(
-            command, stdout=log, stderr=subprocess.STDOUT, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        )
-        started = time.monotonic()
-        try:
-            while process.poll() is None:
-                if ((cancel_folder or folder) / "cancel_requested").exists():
-                    raise ValueError("已取消，原模型保留")
-                if time.monotonic() - started > timeout:
-                    raise ValueError("本地部件处理超时，原模型保留")
-                if progress:
-                    progress()
-                time.sleep(0.35)
-            if process.returncode:
-                lines = (folder / "worker.log").read_text(encoding="utf-8", errors="replace").splitlines()
-                errors = [line.split("ValueError: ", 1)[1] for line in lines if line.startswith("ValueError: ")]
-                raise ValueError(errors[-1][:220] if errors else "本地处理未完成，原模型保留；运行日志已保存")
-        finally:
-            stop_child(process)
+    flag = (cancel_folder or folder) / "cancel_requested"
+
+    def should_stop():
+        if flag.exists():
+            raise ValueError("已取消，原模型保留")
+
+    should_stop()
+    returncode = run_worker(
+        command,
+        folder / "worker.log",
+        timeout=timeout,
+        should_stop=should_stop,
+        on_poll=progress,
+        timeout_message="本地部件处理超时，原模型保留",
+        cwd=Path.cwd(),
+        poll_seconds=0.35,
+    )
+    if returncode:
+        detail = last_error(folder / "worker.log", markers=("ValueError: ",), limit=220)
+        raise ValueError(detail or "本地处理未完成，原模型保留；运行日志已保存")
 
 
 def gpu_wait(folder):

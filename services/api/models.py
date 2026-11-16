@@ -1,6 +1,6 @@
 """Validated, immutable input snapshots for the local MVP."""
 
-from typing import List, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -59,6 +59,7 @@ class JobRequest(StrictModel):
     color: str = Field(default="#b79370", pattern=r"^#[0-9a-fA-F]{6}$")
     levels: int = Field(default=3, ge=2, le=6)
     allow_external: bool = False
+    parts_plan_review: bool = True
 
     @model_validator(mode="after")
     def structural_constraints(self):
@@ -302,3 +303,10 @@ class PartPromptRequest(StrictModel):
 class AlternativeRequest(StrictModel):
     engine: Literal["triposr", "hunyuan-mini"]
     quality: Literal["balanced", "structure"] = "balanced"
+
+
+class PartsPlanConfirm(StrictModel):
+    """User corrections to an automatic part plan before generation."""
+
+    remove: List[str] = Field(default_factory=list, max_length=64)
+    kinds: Dict[str, str] = Field(default_factory=dict, max_length=64)

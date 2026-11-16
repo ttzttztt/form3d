@@ -1,6 +1,6 @@
 """Background local semantic-instance scans; proposals never publish themselves."""
 
-import hashlib, json, os, re, shutil, subprocess, threading, time, uuid
+import hashlib, json, os, re, shutil, threading, time, uuid
 from pathlib import Path
 from .asset_editor import ROOT, source_for
 from .local3d import local_python
@@ -9,6 +9,7 @@ from .detection import detector_status
 from .geometry import validate_glb
 from .glb_document import read_glb, parts_catalog
 from .gpu import GPU_LOCK
+from .subprocesses import last_error, run_worker
 from .semantic_validation import validate_semantic_proposal
 
 SCAN_LOCK = threading.Lock()
@@ -155,18 +156,16 @@ def run_scan(store, job_id, identity, source):
         write_json(folder / "status.json", state)
 
     def run(name, command, timeout):
-        with (folder / (name + ".log")).open("wb") as log:
-            value = subprocess.run(
-                command,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=timeout,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        if value.returncode:
-            lines = (folder / (name + ".log")).read_text(encoding="utf-8", errors="replace").splitlines()
-            errors = [line.split("ValueError: ", 1)[1] for line in lines if line.startswith("ValueError: ")]
-            raise ValueError(errors[-1][:220] if errors else "AI 整体识别未完成，原模型保留；运行日志已保存")
+        returncode = run_worker(
+            command,
+            folder / (name + ".log"),
+            timeout=timeout,
+            timeout_message="AI 整体识别超时，原模型保留，请重试",
+            cwd=Path.cwd(),
+        )
+        if returncode:
+            detail = last_error(folder / (name + ".log"), markers=("ValueError: ",), limit=220)
+            raise ValueError(detail or "AI 整体识别未完成，原模型保留；运行日志已保存")
 
     try:
         stage("rendering")
