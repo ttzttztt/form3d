@@ -60,6 +60,7 @@ class JobRequest(StrictModel):
     levels: int = Field(default=3, ge=2, le=6)
     allow_external: bool = False
     parts_plan_review: bool = True
+    parts_parametric: bool = True
 
     @model_validator(mode="after")
     def structural_constraints(self):

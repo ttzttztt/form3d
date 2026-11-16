@@ -229,6 +229,13 @@ export default function ResultPanel({ wb }: { wb: Workbench }) {
                     <div className="input-preparation parts-plan">
                       <strong>原图部件规划 · {job.parts_plan.count} 个部件</strong>
                       <p>{job.parts_plan.parts.map((part) => part.name).join('、')}</p>
+                      {job.parts_generation?.gpu_peak_reserved_bytes && (
+                        <p>
+                          显存峰值{' '}
+                          {(job.parts_generation.gpu_peak_reserved_bytes / 1024 ** 3).toFixed(1)} GB
+                          · 档位 {job.parts_generation.vram_profile?.name ?? '手动'}
+                        </p>
+                      )}
                       {job.parts_overlay_url && (
                         <a href={job.parts_overlay_url} target="_blank" rel="noreferrer">
                           查看部件识别叠加图

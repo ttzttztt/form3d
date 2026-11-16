@@ -60,7 +60,17 @@ PARTCRAFTER_STAGES = {
     "raw_candidates_ready": "原始部件已生成",
 }
 
-TIMEOUTS = {"plan": 900, "generate": 3600, "audit": 1800, "export": 1800}
+TIMEOUTS = {"plan": 900, "generate": 3600, "audit": 1800, "export": 1800, "parametric": 600}
+
+# Must match services/workers/parametric_parts.HARD_KINDS (kept here so the API process does not
+# import worker code): these kinds are built or replaced as parametric boxes/cylinders.
+HARD_KINDS = {
+    "table": {"tabletop", "leg", "frame", "panel", "shelf", "drawer"},
+    "cabinet": {"door", "drawer", "shelf", "panel", "frame", "body", "leg"},
+    "chair": {"leg"},
+    "sofa": {"leg"},
+}
+VRAM_PROFILES = ["standard", "reduced", "low", "minimal"]  # services/workers/vram_profiles.py
 
 
 def parts_python():
@@ -88,8 +98,13 @@ def parts_first_status():
         "geometry_runtime": bool(local_python("hunyuan-mini")),
         "geometry_extra": (ROOT / ".tools" / "geometry_extra").is_dir(),
     }
+    planner = ("planner_runtime", "detector_weights", "segmenter_weights", "segmenter_source")
+    geometry = ("geometry_runtime", "geometry_extra")
+    generator = ("generator_runtime", "generator_weights", "generator_source")
     return {
-        "available": all(checks.values()),
+        # Furniture made only of hard parts needs no generator: plan + parametric build.
+        "available": all(checks[name] for name in planner + geometry),
+        "generator_available": all(checks[name] for name in generator),
         "checks": checks,
         "missing": [name for name, ok in checks.items() if not ok],
         "planner": "Grounding DINO Tiny + SAM 2.1 Hiera Tiny",
@@ -268,6 +283,7 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
     status = parts_first_status()
     if not status["available"]:
         raise ValueError("部件优先生成环境未就绪，缺少：" + "、".join(status["missing"]))
+    runner_status = status
     if request.object_category not in CATEGORIES:
         raise ValueError("部件优先生成需要先选择家具类别（沙发、椅子、桌子或柜子）")
     root = directory / "parts_first"
@@ -277,7 +293,7 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
     if (plan_folder / "confirmed.json").is_file():
         # Resume after confirmation (or a restart): keep the plan, retry everything after it.
         stamp = int(time.time() * 1000)
-        for folder in (raw_folder, assembly_folder):
+        for folder in (raw_folder, assembly_folder, root / "assembly_parametric", root / "parametric"):
             if folder.exists():
                 folder.rename(folder.with_name(f"{folder.name}_superseded_{stamp}"))
         store.event(job_id, "parts_resume", "使用已确认的部件规划继续生成")
@@ -314,7 +330,42 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
             parts_plan=summary,
             parts_overlay_url=f"/api/jobs/{job_id}/files/parts_overlay.png",
         )
-    return _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root)
+    plan = _read_json(plan_folder / "plan.json") or {}
+    kinds = [p["kind"] for p in _physical(plan)]
+    hard = HARD_KINDS.get(plan.get("object_category"), set())
+    if request.parts_parametric and kinds and all(kind in hard for kind in kinds):
+        return _build_parametric(store, job_id, directory, runner, root)
+    if not runner_status.get("generator_available", True):
+        soft = sorted({kind for kind in kinds if kind not in hard})
+        raise ValueError(
+            "该家具含软包或非规则部件（"
+            + "、".join(soft)
+            + "），需要 PartCrafter 环境："
+            + "、".join(status["missing"])
+        )
+    return _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root, request.parts_parametric)
+
+
+def _build_parametric(store, job_id, directory, runner, root):
+    """All planned parts are hard parts: build them from the masks on the CPU, no AI sampling."""
+    store.event(job_id, "parts_parametric", "全部为规则部件：按原图掩码拟合参数化构件（不使用显卡）")
+    output = root / "parametric"
+    runner.run(
+        "parametric",
+        [
+            local_python("hunyuan-mini"),
+            "-X",
+            "utf8",
+            "-u",
+            WORKERS / "fit_parametric_parts.py",
+            "from-plan",
+            "--plan",
+            root / "plan",
+            "--output",
+            output,
+        ],
+    )
+    return attach_assembly_candidate(store, job_id, output, None, route="parts_first", pending_status="running")
 
 
 def _plan(store, job_id, request, image, runner, check_cancelled, plan_folder):
@@ -343,7 +394,53 @@ def _plan(store, job_id, request, image, runner, check_cancelled, plan_folder):
     _with_gpu(check_cancelled, lambda: runner.run("plan", command))
 
 
-def _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root):
+def _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command, raw_folder):
+    """Start with the profile PartCrafter picks for this card; on out-of-memory retry smaller, in a fresh process."""
+    requested = "auto"
+    while True:
+        try:
+            _with_gpu(
+                check_cancelled,
+                lambda: runner.run(
+                    "generate",
+                    command + ["--vram-profile", requested],
+                    raw_folder / "progress.json",
+                    PARTCRAFTER_STAGES,
+                ),
+            )
+        except ValueError:
+            facts = _read_json(raw_folder / "generation.json") or {}
+            used = (facts.get("vram_profile") or {}).get("name")
+            if not facts.get("out_of_memory") or used not in VRAM_PROFILES or used == VRAM_PROFILES[-1]:
+                if facts.get("out_of_memory"):
+                    raise ValueError(
+                        "显存不足：最低档位仍无法完成，请在部件确认时减少部件数，或让桌腿、柜门等改用参数化构件"
+                    ) from None
+                raise
+            failed = raw_folder.with_name(f"raw_oom_{used}_{int(time.time() * 1000)}")
+            raw_folder.rename(failed)
+            requested = VRAM_PROFILES[VRAM_PROFILES.index(used) + 1]
+            store.event(job_id, "parts_vram_retry", f"显存不足（档位 {used}），改用更省显存的档位 {requested} 重试")
+            continue
+        facts = _read_json(raw_folder / "generation.json") or {}
+        profile = facts.get("vram_profile") or {}
+        peak = facts.get("gpu_peak_reserved_bytes")
+        if peak:
+            store.event(
+                job_id,
+                "parts_generated",
+                f"部件生成完成：显存峰值 {peak / 1024**3:.1f} GB，档位 {profile.get('name', '手动')}"
+                f"（每部件 {facts.get('tokens_per_part')} token）",
+                parts_generation={
+                    "vram_profile": profile,
+                    "gpu_peak_reserved_bytes": peak,
+                    "seconds": facts.get("elapsed_seconds"),
+                },
+            )
+        return facts
+
+
+def _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root, parametric=True):
     plan_folder, raw_folder, assembly_folder = root / "plan", root / "raw", root / "assembly"
     physical = _physical(_read_json(plan_folder / "plan.json") or {})
     command = [
@@ -361,10 +458,7 @@ def _generate_and_assemble(store, job_id, directory, runner, check_cancelled, ro
         "--output",
         raw_folder,
     ]
-    _with_gpu(
-        check_cancelled,
-        lambda: runner.run("generate", command, raw_folder / "progress.json", PARTCRAFTER_STAGES),
-    )
+    _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command, raw_folder)
 
     store.event(job_id, "parts_audit", "检查每个部件的闭合、自交，并与原图部件对应")
     geometry_python = local_python("hunyuan-mini")
@@ -406,11 +500,44 @@ def _generate_and_assemble(store, job_id, directory, runner, check_cancelled, ro
         ],
     )
     check_cancelled()
+    final = assembly_folder
+    plan = _read_json(plan_folder / "plan.json") or {}
+    hard = HARD_KINDS.get(plan.get("object_category"), set())
+    if parametric and any(p["kind"] in hard for p in physical):
+        store.event(job_id, "parts_parametric", "把桌面、支腿、柜门等规则部件替换为拟合的参数化构件")
+        refined = root / "assembly_parametric"
+        try:
+            runner.run(
+                "parametric",
+                [
+                    geometry_python,
+                    "-X",
+                    "utf8",
+                    "-u",
+                    WORKERS / "fit_parametric_parts.py",
+                    "refine",
+                    "--assembly",
+                    assembly_folder,
+                    "--output",
+                    refined,
+                ],
+            )
+            final = refined
+            rows = ((_read_json(refined / "assembly.json") or {}).get("parametric_fit") or {}).get("parts", [])
+            kept = [r for r in rows if not r.get("replaced")]
+            store.event(
+                job_id,
+                "parts_parametric_done",
+                f"{len(rows) - len(kept)}/{len(rows)} 个规则部件已替换为参数化构件"
+                + (f"；{len(kept)} 个与拟合形状偏差较大，保留 AI 结果" if kept else ""),
+            )
+        except ValueError as exc:
+            store.event(job_id, "parts_parametric_skipped", f"参数化替换未完成，保留 AI 部件：{exc}"[:300])
     preview = directory / "parts_fit.png"
     return attach_assembly_candidate(
         store,
         job_id,
-        assembly_folder,
+        final,
         str(preview) if preview.is_file() else None,
         route="parts_first",
         pending_status="running",

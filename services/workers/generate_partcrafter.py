@@ -10,6 +10,8 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ.setdefault("OMP_NUM_THREADS", "4")
+# Less fragmentation when sampling and decoding share a small card (ignored where unsupported).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 def digest(path):
@@ -50,6 +52,15 @@ def run(args):
         args.count_source = "image_plan"
     elif args.num_parts is None or args.count_source == "image_plan":
         raise ValueError("An image-derived count requires --plan; manual probes require --num-parts")
+    vram = None
+    if args.vram_profile:
+        from vram_profiles import choose, profile
+
+        total = torch.cuda.get_device_properties(0).total_memory if torch.cuda.is_available() else 0
+        vram = choose(total, args.num_parts) if args.vram_profile == "auto" else profile(args.vram_profile)
+        vram["gpu_total_bytes"] = total
+        vram["requested"] = args.vram_profile
+        args.tokens, args.dense_depth, args.mesh_depth = vram["tokens"], vram["dense_depth"], vram["mesh_depth"]
     output = Path(args.output)
     if output.exists():
         raise ValueError("Choose a new output folder; preserve previous attempts")
@@ -72,6 +83,7 @@ def run(args):
         "parts": [],
         "status": "running",
         "worker_revision": digest(__file__),
+        "vram_profile": vram,
     }
     if binding:
         facts["plan_binding"] = binding
@@ -272,6 +284,8 @@ def run(args):
         torch.cuda.empty_cache()
     except Exception as exc:
         facts.update(status="failed", error=str(exc))
+        # Reported so the orchestrator can retry with a smaller profile in a fresh process.
+        facts["out_of_memory"] = isinstance(exc, torch.cuda.OutOfMemoryError) or "out of memory" in str(exc).lower()
         (output / "failure.log").write_text(traceback.format_exc(), encoding="utf-8")
         raise
     finally:
@@ -296,4 +310,9 @@ if __name__ == "__main__":
     parser.add_argument("--guidance", type=float, default=7.0)
     parser.add_argument("--dense-depth", type=int, default=7, choices=[6, 7, 8])
     parser.add_argument("--mesh-depth", type=int, default=8, choices=[7, 8, 9])
+    parser.add_argument(
+        "--vram-profile",
+        choices=["auto", "standard", "reduced", "low", "minimal"],
+        help="Override --tokens/--dense-depth/--mesh-depth with a profile (see vram_profiles.py)",
+    )
     run(parser.parse_args())

@@ -114,11 +114,13 @@ def attach_assembly_candidate(
             "part_plan_sha256": file_hash(source / "plan.json"),
             "contacts": evidence.get("contacts", []),
             "placement_hypotheses": evidence.get("placement_hypotheses", []),
+            "parametric_fit": evidence.get("parametric_fit"),
         },
         "warnings": [
             "本地按部件生成候选，尚未通过外观与实物结构验收",
             "单位为归一化比例；真实尺寸、隐藏表面和材质尺度未验证",
-        ],
+        ]
+        + list((evidence.get("parametric_fit") or {}).get("assumptions", [])),
         "modeling_notes": {"mode": "local_native_parts_candidate", "complete_assembly_accepted": False},
     }
     metadata = {

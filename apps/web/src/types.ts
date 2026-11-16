@@ -105,11 +105,17 @@ export interface Job {
     confirmed?: boolean;
   };
   parts_overlay_url?: string;
+  parts_generation?: {
+    vram_profile?: { name?: string; tokens?: number };
+    gpu_peak_reserved_bytes?: number;
+    seconds?: number;
+  };
 }
 export type Route = 'local' | 'assistant' | 'template' | 'meshy' | 'parts_first';
 
 export interface PartsFirstStatus {
   available: boolean;
+  generator_available?: boolean;
   missing: string[];
   categories: string[];
   generator: string;

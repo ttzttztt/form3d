@@ -7,6 +7,7 @@ cover sequencing, gates, cancellation and publication, not model quality.
 import io
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -35,26 +36,46 @@ def picture():
     return output.getvalue()
 
 
+ORIGINAL_RUN = parts_first._Runner.run
+
+
 class FakeWorkers:
     """Writes the artifacts of each stage; behaviour is switched per test.
 
-    The plan stage builds a real AssemblyPlan with the planner's own builder, and the export
-    stage assembles one box per planned part, so plan edits flow through to the GLB.
+    The plan stage builds a real AssemblyPlan with the planner's own builder and real masks;
+    the export stage assembles one box per planned part, so plan edits flow through to the GLB.
+    The CPU-only parametric worker is run for real (with this interpreter).
     """
 
-    def __init__(self, store, kinds=("tabletop", "leg"), geometry_gate="passed", linked=True, block=None):
-        self.store, self.kinds, self.geometry_gate, self.linked, self.block = store, kinds, geometry_gate, linked, block
-        self.calls = []
+    def __init__(
+        self,
+        store,
+        kinds=("tabletop", "leg"),
+        category="table",
+        geometry_gate="passed",
+        linked=True,
+        block=None,
+        oom_profiles=(),
+    ):
+        self.store, self.kinds, self.category = store, kinds, category
+        self.geometry_gate, self.linked, self.block = geometry_gate, linked, block
+        self.oom_profiles = list(oom_profiles)  # profiles that run out of memory, in call order
+        self.calls, self.commands = [], []
         self.stopped = threading.Event()
 
     def __call__(self, runner, name, command, progress_path=None, stage_messages=None):
+        blocking = self.block == name  # decided before the call is visible to the test
+        if blocking:
+            self.stopped.clear()
         self.calls.append(name)
         root = runner.folder
         command = [str(part) for part in command]
+        self.commands.append(command)
+        if name == "parametric":
+            return ORIGINAL_RUN(runner, name, [sys.executable] + command[1:], progress_path, stage_messages)
         if name == "generate":
             (root / "raw").mkdir()  # like PartCrafter, the output folder exists from the start
-        if self.block == name:
-            self.stopped.clear()
+        if blocking:
             try:
                 while True:  # a long-running worker; only cancellation ends it
                     runner.check_cancelled()
@@ -63,9 +84,19 @@ class FakeWorkers:
                 self.stopped.set()
         if name == "plan":
             self.write_plan(root / "plan", command)
+        elif name == "generate" and self.oom_profiles:
+            requested = command[command.index("--vram-profile") + 1]
+            used = self.oom_profiles.pop(0) if requested == "auto" else requested
+            facts = {"status": "failed", "out_of_memory": True, "vram_profile": {"name": used}}
+            (root / "raw" / "generation.json").write_text(json.dumps(facts), encoding="utf-8")
+            raise ValueError("部件优先流程「generate」阶段失败：CUDA out of memory")
+        elif name == "generate":
+            facts = {"status": "raw_candidates_ready", "vram_profile": {"name": "low"}, "tokens_per_part": 512}
+            facts["gpu_peak_reserved_bytes"] = 5 * 1024**3
+            (root / "raw" / "generation.json").write_text(json.dumps(facts), encoding="utf-8")
         elif name == "audit":
             (root / "raw" / "audit").mkdir()
-            slots = len(json.loads((root / "plan" / "plan.json").read_text(encoding="utf-8"))["parts"])
+            slots = len(self.physical(root / "plan"))
             status = "photo_linked_hypothesis" if self.linked else "ambiguous"
             audit = {
                 "geometry_gate": self.geometry_gate,
@@ -76,26 +107,41 @@ class FakeWorkers:
         elif name == "export":
             self.write_assembly(root / "plan", root / "assembly")
 
+    @staticmethod
+    def physical(plan_folder):
+        plan = json.loads((plan_folder / "plan.json").read_text(encoding="utf-8"))
+        return [p for p in plan["parts"] if p.get("geometry_role", "physical_part") == "physical_part"]
+
     def write_plan(self, folder, command):
+        import numpy as np
+
         folder.mkdir()
         self.image_id = command[command.index("--image-id") + 1]
         self.source = Path(command[command.index("--input") + 1])
-        rows = []
+        size, rows, whole = (120, 160), [], np.zeros((120, 160), bool)
         for number, kind in enumerate(self.kinds):
-            mask = folder / f"mask_{number}.png"
-            Image.new("L", (8, 8), 60 + 40 * number).save(mask)
+            mask = np.zeros(size, bool)
+            if kind == "tabletop":
+                mask[20:32, 20:140] = True
+            else:  # legs and other parts: distinct narrow columns
+                left = 24 + 18 * number
+                mask[32 : 110 - 4 * (number % 2), left : left + 6] = True
+            whole |= mask
+            path = folder / f"mask_{number}.png"
+            Image.fromarray(mask.astype("uint8") * 255).save(path)
             rows.append(
                 {
                     "kind": kind,
-                    "mask_file": mask.name,
-                    "mask_sha256": file_hash(mask),
-                    "target": {"x": 0.1 * number, "y": 0.1, "width": 0.1, "height": 0.2},
+                    "mask_file": path.name,
+                    "mask_sha256": file_hash(path),
+                    "target": {"x": 0.1 + 0.05 * number, "y": 0.1, "width": 0.05, "height": 0.2},
                     "visibility": "partial",
                     "evidence_kind": "original_photo",
                 }
             )
+        Image.fromarray(whole.astype("uint8") * 255).save(folder / "whole_mask.png")
         plan = plan_from_image_observations(
-            self.image_id, file_hash(self.source), "table", {"x": 0, "y": 0, "width": 1, "height": 1}, rows
+            self.image_id, file_hash(self.source), self.category, {"x": 0, "y": 0, "width": 1, "height": 1}, rows
         )
         (folder / "plan.json").write_text(plan.model_dump_json(), encoding="utf-8")
         (folder / "observations.json").write_text(json.dumps({"parts": rows}), encoding="utf-8")
@@ -105,8 +151,12 @@ class FakeWorkers:
         folder.mkdir()
         plan = json.loads((plan_folder / "plan.json").read_text(encoding="utf-8"))
         builder = GLBBuilder("#aaaaaa")
-        for index, part in enumerate(plan["parts"]):
-            builder.box(part["name"], (index * 2.0, 0, 0), (1, 0.1, 1))
+        index = 0
+        for part in plan["parts"]:
+            if part.get("geometry_role") == "structural_group":
+                part["status"] = "ready"
+                continue
+            builder.box(part["name"], (index * 2.0, 0, 0), (0.08, 0.7, 0.08) if part["kind"] == "leg" else (1, 0.1, 1))
             primitive = part["id"] + "__geometry"
             builder.document["nodes"][index]["extras"] = {"form_part_ids": {"0": primitive}}
             builder.document["meshes"][index]["primitives"][0]["extras"] = {
@@ -114,17 +164,19 @@ class FakeWorkers:
                 "form_semantic_kind": part["kind"],
             }
             part.update(status="ready", primitive_ids=[primitive])
+            index += 1
         builder.save(folder / "model.glb")
         model_sha = file_hash(folder / "model.glb")
         for part in plan["parts"]:
-            part["model_sha256"] = model_sha
+            if part.get("geometry_role") != "structural_group":
+                part["model_sha256"] = model_sha
         plan["status"] = "ready_for_review"
         AssemblyPlan.model_validate(plan)
         (folder / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
         evidence = {
             "status": "candidate_ready_for_review",
             "model_sha256": model_sha,
-            "part_ids": [p["id"] for p in plan["parts"]],
+            "part_ids": [p["id"] for p in plan["parts"] if p.get("geometry_role") != "structural_group"],
             "source_engine": "PartCrafter",
         }
         (folder / "assembly.json").write_text(json.dumps(evidence), encoding="utf-8")
@@ -180,7 +232,7 @@ class PartsFirstTests(unittest.TestCase):
 
     def test_success_runs_all_stages_and_publishes_reviewable_assembly(self):
         workers = FakeWorkers(self.store)
-        job = self.wait(self.start(workers, parts_plan_review=False))
+        job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
         self.assertEqual(job["status"], "awaiting_review", job.get("error"))
         self.assertEqual(workers.calls, ["plan", "generate", "audit", "export"])
         self.assertEqual(job["report"]["route"], "parts_first")
@@ -196,7 +248,7 @@ class PartsFirstTests(unittest.TestCase):
 
     def test_plan_review_pauses_then_edits_flow_into_the_assembly(self):
         workers = FakeWorkers(self.store, kinds=("tabletop", "leg", "leg"))
-        job = self.wait(self.start(workers))
+        job = self.wait(self.start(workers, parts_parametric=False))
         self.assertEqual(job["status"], "awaiting_plan_review", job.get("error"))
         self.assertEqual(workers.calls, ["plan"])
         plan = job["parts_plan"]
@@ -257,7 +309,7 @@ class PartsFirstTests(unittest.TestCase):
         for kwargs in ({"geometry_gate": "failed"}, {"linked": False}):
             with self.subTest(**kwargs):
                 workers = FakeWorkers(self.store, **kwargs)
-                job = self.wait(self.start(workers, parts_plan_review=False))
+                job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
                 self.assertEqual(job["status"], "awaiting_input")
                 self.assertIn("未通过审计", job["error"])
                 self.assertEqual(workers.calls, ["plan", "generate", "audit"])
@@ -265,7 +317,7 @@ class PartsFirstTests(unittest.TestCase):
 
     def test_cancel_during_generation_stops_without_publishing(self):
         workers = FakeWorkers(self.store, block="generate")
-        job = self.start(workers, parts_plan_review=False)
+        job = self.start(workers, parts_plan_review=False, parts_parametric=False)
         for _ in range(500):
             if workers.calls[-1:] == ["generate"]:
                 break
@@ -285,7 +337,7 @@ class PartsFirstTests(unittest.TestCase):
 
     def test_restart_after_confirmation_resumes_without_planning_again(self):
         workers = FakeWorkers(self.store, block="generate")
-        job = self.wait(self.start(workers))
+        job = self.wait(self.start(workers, parts_parametric=False))
         self.client.post(f"/api/jobs/{job['id']}/parts-plan/confirm", json={})
         for _ in range(500):
             if workers.calls[-1:] == ["generate"]:
@@ -304,6 +356,55 @@ class PartsFirstTests(unittest.TestCase):
         self.assertEqual(workers.calls, ["plan", "generate", "generate", "audit", "export"])
         superseded = list((self.store.root / "jobs" / job["id"] / "parts_first").glob("raw_superseded_*"))
         self.assertEqual(len(superseded), 1)
+
+    def test_all_hard_parts_are_built_parametrically_without_generation(self):
+        workers = FakeWorkers(self.store, kinds=("tabletop", "leg", "leg"))
+        job = self.wait(self.start(workers, parts_plan_review=False))
+        self.assertEqual(job["status"], "awaiting_review", job.get("error"))
+        self.assertEqual(workers.calls, ["plan", "parametric"])  # no GPU stage at all
+        self.assertEqual(job["report"]["evidence"]["source_engine"], "parametric_from_masks")
+        self.assertTrue(any("深度" in w for w in job["report"]["warnings"]))
+        parts = self.client.get(f"/api/jobs/{job['id']}/asset").json()["parts"]
+        self.assertEqual(sorted(p["semantic_kind"] for p in parts), ["leg", "leg", "tabletop"])
+
+    def test_hard_parts_without_generator_environment_still_work(self):
+        ready = {**READY, "generator_available": False, "missing": ["generator_weights"]}
+        with patch("services.api.parts_first.parts_first_status", return_value=ready):
+            hard = self.wait(self.start(FakeWorkers(self.store), parts_plan_review=False))
+            self.assertEqual(hard["status"], "awaiting_review", hard.get("error"))
+            soft = FakeWorkers(self.store, kinds=("seat_cushion", "leg"), category="sofa")
+            job = self.wait(self.start(soft, parts_plan_review=False, object_category="sofa"))
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("seat_cushion", job["error"])
+        self.assertEqual(soft.calls, ["plan"])
+
+    def test_mixed_furniture_replaces_only_hard_parts_after_generation(self):
+        workers = FakeWorkers(self.store, kinds=("seat_cushion", "leg"), category="sofa")
+        job = self.wait(self.start(workers, parts_plan_review=False, object_category="sofa"))
+        self.assertEqual(job["status"], "awaiting_review", job.get("error"))
+        self.assertEqual(workers.calls, ["plan", "generate", "audit", "export", "parametric"])
+        fit = job["report"]["evidence"]["parametric_fit"]
+        self.assertEqual([(r["kind"], r["replaced"]) for r in fit["parts"]], [("leg", True)])
+        stages = [e["stage"] for e in job["events"]]
+        self.assertIn("parts_generated", stages)  # VRAM peak and profile reported
+
+    def test_out_of_memory_retries_with_smaller_profiles(self):
+        workers = FakeWorkers(self.store, oom_profiles=["low"])
+        job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
+        self.assertEqual(job["status"], "awaiting_review", job.get("error"))
+        profiles = [
+            c[c.index("--vram-profile") + 1] for c, n in zip(workers.commands, workers.calls) if n == "generate"
+        ]
+        self.assertEqual(profiles, ["auto", "minimal"])
+        self.assertIn("parts_vram_retry", [e["stage"] for e in job["events"]])
+        folder = self.store.root / "jobs" / job["id"] / "parts_first"
+        self.assertEqual(len(list(folder.glob("raw_oom_low_*"))), 1)  # the failed attempt is kept
+
+    def test_out_of_memory_at_smallest_profile_explains_what_to_do(self):
+        workers = FakeWorkers(self.store, oom_profiles=["minimal"])
+        job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("显存不足", job["error"])
 
     def test_detection_queue_is_not_blocked_by_long_jobs(self):
         started = threading.Event()

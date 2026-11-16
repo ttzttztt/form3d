@@ -43,9 +43,12 @@
 |---|---|---|---|
 | 1. 原图部件规划 | `services/workers/plan_assembly_from_photo.py`（Grounding DINO Tiny + SAM 2.1 Tiny） | `.venv-sam2`，占用 GPU | 计划状态必须为 `planned`，即没有类别冲突且不超过 16 个部件；否则停在 `awaiting_input` 并说明原因 |
 | 1b. 用户确认（默认开启） | 界面显示带编号的叠加图，可以修正类别、去掉部件；`POST /api/jobs/{id}/parts-plan/confirm` | — | 修正后用规划器同一个构建函数重建计划，仍须满足上面的门槛；原始计划保存为 `plan.original.json` |
+| 2a. 全部为规则部件时 | `fit_parametric_parts.py from-plan`：按掩码和品类深度先验直接生成盒体/圆柱 | `.venv-hunyuan`（仅 CPU） | 跳过 2–4 步，不需要 GPU 和 PartCrafter；深度和看不见的支腿是推测，会写入报告 |
 | 2. 按部件生成 | `generate_partcrafter.py`（部件数来自第 1 步的计划） | `.venv-parts`，占用 GPU | 每个槽位都要解码出有限网格 |
+| 2b. 显存档位 | `--vram-profile auto`（`services/workers/vram_profiles.py`）：按显存和部件数选择 token 数与网格精度；显存不足时自动降一档，在新进程中重试 | — | 每次记录档位和显存峰值，可据此在本机校准阈值 |
 | 3. 审计 | `audit_parts_first.py` | `.venv-hunyuan` + `.tools/geometry_extra` | 每个部件闭合、无自交，且与原图部件掩码一一对应；否则停在 `awaiting_input` |
 | 4. 装配导出 | `export_planned_assembly.py` | 同上 | 生成带部件身份、UV、层级的 GLB，并做完整 glTF 校验 |
+| 4b. 规则部件替换 | `fit_parametric_parts.py refine`：把桌面、支腿、柜门等替换为拟合到 AI 网格上的盒体/圆柱 | 同上（CPU） | 平均偏差 ≤2%、95 分位 ≤5%、体积比 0.7–1.45 才替换，否则保留 AI 部件并说明原因 |
 | 5. 发布 | `attach_assembly_candidate` | API 进程 | 哈希与身份一致后才进入 `awaiting_review` |
 
 编排代码在 `services/api/parts_first.py`，测试在 `tests/test_parts_first.py`。环境是否就绪可以看 `/api/config` 中 `providers.parts_first.missing`。
@@ -61,5 +64,5 @@
    - 原图对应率（仅作诊断，不是精度）；
    - 人工外观评分。
 3. **FlexPart 接入。** 把第 1 步的 SAM 部件掩码直接作为 FlexPart 的提示，替换 PartCrafter 的“只给部件数”。这一步只需改第 2 阶段的 worker，编排不用动。
-4. **硬质部件参数化。** 桌面、桌腿、柜门、层板、抽屉面板改为拟合参数化基元，用部件掩码加生成网格的包围盒和朝向做约束，AI 只负责坐垫、靠枕、抱枕等软包部件。可以复用 `services/api/geometry.py` 里的 GLBBuilder 与模板构件。
+4. **硬质部件参数化（已实现第一版）。** 见上表 2a、4b。下一步：用真实照片校准深度先验与支腿前后位置推断；增加带圆角、锥形腿、框架式桌裙等构件。
 5. **纹理。** 几何验收通过后再单独评估 TRELLIS.2 或 Hunyuan3D-2.1 纹理，两者都需 ≥21–24 GB 显存。按部件烘焙材质时，要保持部件身份不变。

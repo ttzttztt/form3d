@@ -33,6 +33,7 @@ export function useWorkbench() {
   const [objectCategory, setObjectCategory] = useState('');
   const [autoRetry, setAutoRetry] = useState(true);
   const [partsPlanReview, setPartsPlanReview] = useState(true);
+  const [partsParametric, setPartsParametric] = useState(true);
   const [editedPreview, setEditedPreview] = useState<{
     jobId: string;
     url: string;
@@ -369,6 +370,7 @@ export function useWorkbench() {
           levels,
           allow_external: consent,
           parts_plan_review: partsPlanReview,
+          parts_parametric: partsParametric,
         },
         { 'Idempotency-Key': creationKey.current },
       );
@@ -433,6 +435,8 @@ export function useWorkbench() {
   }
 
   return {
+    partsParametric,
+    setPartsParametric,
     partsPlanReview,
     setPartsPlanReview,
     partsReady,

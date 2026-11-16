@@ -23,6 +23,8 @@ import type { Workbench } from './useWorkbench';
 
 export default function InputPanel({ wb }: { wb: Workbench }) {
   const {
+    partsParametric,
+    setPartsParametric,
     partsPlanReview,
     setPartsPlanReview,
     partsReady,
@@ -331,7 +333,13 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
                 <Boxes size={18} />
                 <span>
                   <strong>部件优先生成</strong>
-                  <small>{partsReady ? 'PartCrafter · 可编辑部件' : '部件环境待就绪'}</small>
+                  <small>
+                    {!partsReady
+                      ? '部件环境待就绪'
+                      : config?.providers.parts_first?.generator_available === false
+                        ? '仅规则部件 · 无需显卡'
+                        : 'PartCrafter · 可编辑部件'}
+                  </small>
                 </span>
                 <i>{route === 'parts_first' && <Check size={10} />}</i>
               </button>
@@ -663,6 +671,23 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
                   />
                   <span>识别完成后先让我确认部件（推荐）</span>
                 </label>
+                <label className="checkbox-label parts-review-toggle">
+                  <input
+                    type="checkbox"
+                    checked={partsParametric}
+                    onChange={(event) => {
+                      setPartsParametric(event.target.checked);
+                      creationKey.current = undefined;
+                    }}
+                  />
+                  <span>桌面、支腿、柜门等规则部件用参数化构件（推荐，更规整、更省显存）</span>
+                </label>
+                {partsReady && config?.providers.parts_first?.generator_available === false && (
+                  <span>
+                    未安装
+                    PartCrafter：只能生成全部由规则部件组成的家具（如桌、柜）；含坐垫、靠枕的家具需要先安装。
+                  </span>
+                )}
                 <span>
                   {partsReady
                     ? '仅几何、无纹理；最多 16 个部件；尺寸与隐藏结构未验证'
