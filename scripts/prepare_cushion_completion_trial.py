@@ -1,0 +1,9 @@
+# -*- coding: utf-8 -*-
+"""Explicitly inferred 2D reference experiment, not an automatic SAM success."""
+import json
+from pathlib import Path
+import cv2,numpy as np
+from PIL import Image,ImageDraw
+ROOT=Path(__file__).resolve().parents[1];folder=ROOT/'experiments/part_regeneration_20261113/leather_cushion';source=folder/'references/product.png';image=np.asarray(Image.open(source).convert('RGB')).copy();h,w=image.shape[:2];polygon=[[33,342],[450,165],[905,330],[905,358],[514,600],[33,380]];mask=np.zeros((h,w),np.uint8);cv2.fillPoly(mask,[np.asarray(polygon,np.int32)],255)
+refs=json.loads((folder/'references/references.json').read_text(encoding='utf-8'));pillow=refs['candidates'][0];occlusion=np.asarray(Image.open(folder/'references'/pillow['mask_file'])).copy();cv2.ellipse(occlusion,(180,246),(90,120),0,0,360,255,-1);occlusion=cv2.dilate(occlusion,np.ones((7,7),np.uint8));occlusion[mask==0]=0;known=(mask>0)&(occlusion==0);median=np.median(image[known],axis=0).astype(np.uint8);image[mask==0]=median;completed=cv2.inpaint(image,occlusion,9,cv2.INPAINT_TELEA);rgba=np.dstack([completed,mask]);out=folder/'completed_reference';out.mkdir(exist_ok=True);Image.fromarray(rgba).save(out/'reference.png');Image.fromarray(occlusion).save(out/'inferred_region.png');white=Image.new('RGBA',(w,h),'white');white.alpha_composite(Image.fromarray(rgba));white.convert('RGB').save(out/'preview.png')
+metadata={'source':str(source),'method':'assistant_estimated_cushion_outline_and_OpenCV_Telea_inpainting','automatic_reference_extraction':False,'outline_pixels':polygon,'occluded_region_is_inferred':True,'inferred_visible_reference_area_fraction':float((occlusion>0).sum()/(mask>0).sum()),'real_hidden_geometry_verified':False,'purpose':'feasibility_experiment_only; not accepted as a faithful product reference'};(out/'provenance.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf-8');print(json.dumps(metadata,ensure_ascii=False))

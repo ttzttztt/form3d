@@ -1,0 +1,17 @@
+# Independent Python 3.10 runtime; reuse CUDA torch without changing TripoSR.
+diffusers==0.33.1
+transformers==4.46.3
+accelerate==1.6.0
+huggingface-hub>=0.30,<1
+omegaconf==2.3.0
+einops>=0.7,<0.9
+trimesh>=4.0,<5
+scikit-image>=0.22,<0.26
+rembg[cpu]==2.0.61
+pymeshlab==2023.12.post3
+pygltflib>=1.16,<2
+psutil>=5.9
+xatlas==0.0.11
+shapely>=2.0,<3
+mapbox-earcut>=2.0,<3
+rtree>=1.4,<2

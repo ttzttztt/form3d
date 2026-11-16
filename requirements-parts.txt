@@ -1,0 +1,13 @@
+# Isolated image-to-parts runtime; CUDA torch is inherited from the existing
+# machine environment. Do not install these into .venv or .venv-hunyuan.
+diffusers==0.34.0
+transformers==4.46.3
+accelerate==1.6.0
+safetensors==0.5.3
+numpy==1.26.4
+Pillow>=10,<12
+trimesh>=4.5,<5
+scipy>=1.11,<1.16
+scikit-image>=0.22,<0.26
+einops>=0.8,<0.9
+omegaconf==2.3.0

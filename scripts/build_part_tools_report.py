@@ -1,0 +1,137 @@
+"""Honest delivery report from measured runs and manually inspected images."""
+import hashlib,html,json
+from pathlib import Path
+import httpx
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'experiments/part_tools_20261112'
+def read(name):return json.loads((OUT/name).read_text(encoding='utf-8'))
+cases=read('cases.json');sam=read('sam_browser.json');base=read('geometric_baseline.json');edits=read('real_edits.json');workflow=read('workflow_browser.json');saved=read('sam_save_browser.json');compare=read('generation_compare_ui.json');exports=read('part_export_resource_checks.json')
+assert len(cases)==len(sam['cases'])==len(edits)==len(exports)==8
+assert all(c['world_triangles_retained_after_uv'] and c['subset_export_exact'] and c['source_unchanged'] and c['max_world_translation_error']<2e-6 for c in edits)
+assert all(e['only_selected_geometry_in_document'] and e['exact_world_triangles'] for e in exports)
+assert not any(r.get('errors') or r.get('failure') for r in (sam,base,workflow,saved,compare))
+assert compare.get('two_model_previews_visible') is True
+client=httpx.Client(base_url='http://127.0.0.1:8001',timeout=30);generation={name:client.get('/api/jobs/'+compare[name]).json() for name in ('source','alternative')};client.close()
+assert all(j['status'] not in ('queued','running') for j in generation.values());(OUT/'generation_outcomes.json').write_text(json.dumps(generation,ensure_ascii=False,indent=2),encoding='utf-8')
+names={'round_table':'圆桌','alien_table':'外星人造型边桌','official_chair':'官方示例餐椅','accent_chair':'蓝色扶手椅','leather_sofa':'皮质沙发','corduroy_sofa':'灯芯绒沙发','white_cabinet':'拱形柜','authored_bookcase':'代码建模书柜'}
+observations={'round_table':'可见桌面较连贯；底部未观察面没有补选。','alien_table':'选到造型底座上部，没有覆盖整个底座；点击位置并非桌面。','official_chair':'椅背软包可见区域比局部平面更连贯；边框与背面仍需检查。','accent_chair':'可见坐垫及前沿形成候选，边缘较碎；不代表完整坐垫实体。','leather_sofa':'主要选到靠垫可见表面，仍有边缘需要手工修正。','corduroy_sofa':'只选到窄小区域，本次试点不适合直接当作完整部件。','white_cabinet':'选区过宽，跨多个结构；本次试点未准确分出柜门或层板。','authored_bookcase':'多视角候选不一致，安全拒绝；原有独立部件用普通点选更直接。'}
+review=[{'case':c['case'],'observation':observations[c['case']],'complete_semantic_part_accepted':False} for c in cases];(OUT/'visual_review.json').write_text(json.dumps(review,ensure_ascii=False,indent=2),encoding='utf-8')
+sam_rows=[];uv_rows=[]
+baseline={r['case']:r for r in base['cases']}
+for c in sam['cases']:
+    geometric=baseline[c['case']];text='已有独立部件' if any('已有部件' in s for s in geometric['message']) else str(geometric['selected_faces']);sam_rows.append(f"| {names[c['case']]} | {text} | {c.get('selected_faces',0):,} | {observations[c['case']]} |")
+for c in edits:
+    uv_step=next(s for s in reversed(c['steps']) if s['operation']=='unwrap_uv' and s['status']==201);algorithm=uv_step['manifest']['operation']['parts'][0]['algorithm'];before=c['planar_uv_diagnostic']['geometry_area_fraction_with_collapsed_uv'];after=c['final_uv_diagnostic']['geometry_area_fraction_with_collapsed_uv'];uv_rows.append(f"| {names[c['case']]} | {algorithm} | {before:.8f} → {after:.8f} | {c['max_world_translation_error']:.2e} | 保留 |")
+demo=saved['job'];table=next(c for c in edits if c['case']=='round_table');success=sum(c.get('selected_faces',0)>0 for c in sam['cases']);newjob=generation['alternative'];newinf=newjob.get('report',{}).get('local_inference',{})
+report=f'''# 点击辅助、部件检查、生成对照、UV 与拆装：交付与验收
+
+日期：2026-11-12。新版运行于 **http://127.0.0.1:8001**。全部模型推理在本机进行，本轮没有商业 API 密钥、云端建模、Git 提交或外网部署。
+
+## 本轮结论
+
+五项功能已经接通并完成真实操作验证：多视角 SAM 点击候选、部件单独显示/隐藏与底面检查、同图本地引擎对照、UV 展开、拆解展示/实际移动/部件导出。
+
+自动选区仍需人工修正。本轮八个家具中 {success} 个得到非空可编辑候选，1 个因多视角不一致而拒绝；这不是 {success}/8 的语义准确率。柜子、灯芯绒沙发的候选不够准确，其他样本也没有证明完整的背面或真实拆装边界。
+
+可直接试用：[坐垫候选局部换色](http://127.0.0.1:8001/?job={demo}) · [圆桌拆装与 UV](http://127.0.0.1:8001/?job={table['job']}) · [图像、日志与对照页](../experiments/part_tools_20261112/index.html)。
+
+## 1. 点击辅助分割
+
+入口：“AI 辅助选区”。已有“点选部件”和涂抹保留。
+
+实际方法：从当前模型生成最多三个可见视角，沿模型竖轴左右偏转；将点击位置投影到每张渲染图，使用本地 **SAM 2.1 Hiera Tiny 的正点提示**提出多个掩码。在包含点击点、预测分数至少 0.5 的候选中取较小的连通区域。随后根据深度遮挡，将掩码对应回原网格三角面的中心点，进行多视角投票，再保留与点击面连通的区域。两次可见时要求两次同意，三次可见时至少两次；只观察到一次的表面可由一次投票保留。
+
+这是对 2D SAM 的交互式使用，没有训练或接入新的语义 3D 部件模型。预测分数用于筛选候选，不是实测 IoU。背面不可见处不自动补选；最多 50 万选中面，超限或一致区域太小时拒绝。支持在结果上继续涂抹、撤销和保存部件。显卡忙时提示重试；异常保留原选区与版本。
+
+八样本覆盖两张桌子、两张椅子、两张沙发和两种柜架。其中餐椅是官方示例，书柜是已有代码模型。本轮没有把八份模型全部重新生成。普通几何点选与 SAM 分别从默认视角试点；画布和提示高度可能不同，因此这些截图不是严格同一个 3D 点的标注精度评测。
+
+| 家具 | 普通点选得到的面数 / 结果 | SAM 候选面数 | 人工查看的结论 |
+| --- | --- | ---: | --- |
+{chr(10).join(sam_rows)}
+
+真实闭环也已验证：扶手椅候选 **{saved['selected_faces']:,} 面**保存成“坐垫表面（SAM 候选）”，随后只给这个新部件保存绿色材质；整件模型的三角面总数保持不变，其他部件材质签名不变。见 `sam_save_browser.json`。这仍只是可编辑表面，不是完整可制造坐垫。
+
+![SAM 候选保存后局部换色](../experiments/part_tools_20261112/sam_saved_chair_part.png)
+
+## 2. 检查与修正分组
+
+入口：模型下方“检查部件与拆解展示”。支持仅看选中部件、隐藏选中、显示全部、查看正面/背面/底面。底面视角与自由旋转允许从下方观察。清单选择仍与 3D 高亮联动。
+
+浏览器检查了单独显示后像素恢复、隐藏物体不会被射线拾取、底面/背面视角可达。隐藏只影响显示，已保存的部件和模型数据保留；已有选面高亮会跟随拆解位置更新，隐藏部件上的高亮也会隐藏。
+
+## 3. 同图生成对照与结构验收
+
+入口：“更多操作 → 同图本地引擎对照与结构验收 → 打开生成结果对照”。对照窗口可以同时查看两个候选，展开原图，逐项核对轮廓、细腿、开口、背景残留及纹理。检查框仅帮助当前检查，不会自动判为外观合格。
+
+同图、同选框、同清理设置的不同引擎结果属于一组；重复点击复用已有请求或候选，不连续创建推理任务。新候选强制本地处理，关闭自动引擎重试，保留独立任务；打开某个候选继续编辑，不覆盖源模型。
+
+本轮通过真实界面新增了一次 TripoSR 扶手椅推理：任务 `{newjob['id']}`，终态 `{newjob['status']}`，实际引擎 `{newjob.get('actual_engine')}`，三角面 {newjob.get('metrics',{}).get('triangles',0):,}，本地总耗时 {newinf.get('total_local_wall_seconds','未记录')} 秒。Hunyuan 对照来自已有同图输出，并非本轮重新推理。
+
+看图结论：TripoSR 的颜色接近蓝色，但细金属腿明显变形、缩短，靠背/坐垫纹理有噪声；Hunyuan 灰色几何保留更多细支撑形态，但腿架仍不完整、没有蓝色面料。两者均未通过完整商品外观验收。该功能提供比较和人工选择，没有宣称能自动挑出最真实模型或修复所有细腿。
+
+![TripoSR 实际对照输出](../experiments/part_tools_20261112/chair_triposr_generation_front.png)
+
+## 4. 曲面贴图与 UV
+
+入口：“换材质 → 曲面贴图与 UV 展开”。展开会创建新版本，保留所有原世界坐标三角面。原贴图位置可能变化，建议先展开再上传材质，原版本可恢复。原有纹理重复与旋转控制继续可用。
+
+- 小于等于 6 万面：自动模式使用 **xatlas 0.0.11** 图集展开，接缝处允许复制顶点，不改变原三角面形状。
+- 高面数：自动模式使用六向表面分区，将每个三角面按主要法线方向放进六个投影图块。它避免单一平面在侧面的严重塌缩，但分区之间有明显接缝，仍可能出现拉伸与图案不连续。
+- 可以明确选择精细图集或快速分区。精细图集超过面数上限会拒绝，避免长时间卡住。它不是保证任意曲面无拉伸的完整专业展开工具。
+
+八个样本的当前选中组完成展开、单独导出与世界坐标移动复测。下表 UV 指标为“UV 面积低于 1e-12 的三角面占据的几何面积比例”，只诊断投影塌缩，不衡量所有拉伸、接缝或材质真实度。某些样本的数值没有变好，不能统一称为纹理质量提升。
+
+| 家具 | 最终展开算法 | 塌缩面积比例：平面 → 展开 | 移动的最大数值误差 | 原始文件 |
+| --- | --- | --- | --- | --- |
+{chr(10).join(uv_rows)}
+
+棋盘图为单独制作的诊断副本，只用于看方向、拉伸与接缝，不是恢复商品面料；同一重复参数在图集中的视觉尺寸也会不同。圆桌、沙发底部的条纹塌缩有所改善，快速分区接缝仍可见。图集展开也有极小 UV 面积面，没有把它们隐藏成“全部完美”。
+
+## 5. 拆解展示、实际移动与单独导出
+
+“拆解展示距离”只改变查看位置，按逻辑部件整体散开；复位恢复原位置，不新增版本，也不影响下载。主清单中的同组多材质仍一起展示。
+
+实际移动入口：“拆分部件 → 部件移动与单独导出”。按模型世界坐标输入 X/Y/Z，每轴单次最多 ±5 模型单位，保存新版本。单位没有核准为米或毫米；源节点变换会保留，移动量转换回各节点的局部坐标。未选中部件不移动，材质和属性随部件保留。
+
+单独导出保留选中部件的原坐标和材质，不自动居中、补洞、封口或焊接。导出文件已裁剪未选中的 mesh 与未引用顶点；材质扩展中的贴图索引保留。无法安全处理的扩展会拒绝。它导出的是当前编辑分组，有的组仍是脚尖区域或柜体高度段，不代表真实装配零件。
+
+八个导出文件通过完整 glTF 校验，并独立核对选中世界三角面与 UV 版本逐项相同、文档只含选中几何。导出不新增编辑版本。世界移动测试使用 +0.08 模型单位，浮点最大误差均小于 2e-6；它是数值误差检查，不是实物尺寸误差。
+
+## 自动化、浏览器与 review 记录
+
+Python：API/合同 40 项、既有资产回归 9 项、家具分组/修复 12 项、新 UV/移动/导出 9 项，均通过，共 **70 项**。JS 材质状态 7 项、部件检查/连通约束 8 项通过。浏览器功能主流程 {len(workflow['checks'])} 项通过，另完成 SAM 到局部材质保存闭环、生成对照和重复点击去重；两个 3D 候选确实同时显示。已检查的页面没有未捕获 JS 异常，390px 宽度无横向溢出。生产构建通过，主 JS 包仍有体积提示。
+
+发现并处理的实际问题：
+
+1. 首轮测试脚本只等 30 秒，把仍在处理的请求记成未完成，随后请求遇到显卡锁。改为先确认请求发出，再等待完整响应，八个模型顺序重测；原轮次保留在 `sam_browser_initial_incomplete.*`。
+2. 圆桌和皮质沙发直接精细展开超时，返回 422，没有发布坏版本。增加面数预算、快速分区与明确选项，两个样本重测成功。旧记录在 `real_edits_before_uv_budget_fix.json`，当前记录保留初次失败和后续成功。
+3. 隐藏后的 mesh 仍可能被 Three.js 射线命中。改为只从可见 mesh 拾取，增加实际界面回归；选面高亮也随显示/拆解状态刷新。
+4. 带材质扩展时，原资源整理会保留未使用几何。导出现在单独裁剪 mesh、顶点、访问器与 buffer view，保留材质扩展引用；增加扩展与未引用顶点测试，八份文件重新导出、校验。旧文件以 `*_part_before_resource_prune.glb` 保留。
+5. 生成对照使用原生模态窗口，限制键盘焦点，支持关闭/ESC，避免侧栏塞进两个过小的预览；窄屏改为上下排列。
+6. 同图参数匹配曾把整数 `0` 与浮点 `0.0` 当作不同选框，导致漏掉另一个引擎候选。统一数值比较，补充合同回归，并在浏览器断言两个候选预览均出现，防止只测创建请求而漏掉展示问题。
+
+## 可复查文件与运行方式
+
+证据目录：`experiments/part_tools_20261112/`。主要记录：`sam_browser.json`、`geometric_baseline.json`、`sam_save_browser.json`、`real_edits.json`、`part_export_resource_checks.json`、`generation_outcomes.json`、`visual_review.json`、`workflow_browser.json`、`external_renders.json` 与各测试日志。SAM 的渲染、掩码、提示和 worker 日志保留在测试任务的 `part_proposals/` 下。
+
+主要实现：`apps/web/src/samPartSelection.ts`、`partInspection.ts`、`ReconstructionCompare.tsx`、`Viewer.tsx`、`AssetEditor.tsx`；`services/api/part_prompt.py`、`app.py`、`models.py`；`scripts/segment_part_views.py`、`part_tools.py`。xatlas 已加入两种本地 3D 环境的依赖清单。本机已安装并运行验证。
+
+```powershell
+# 新版地址 http://127.0.0.1:8001
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -Port 8001
+.venv/Scripts/python.exe -m unittest discover -s tests
+.venv-hunyuan/Scripts/python.exe scripts/test_part_tools.py
+node scripts/test_part_inspection.mjs
+```
+
+旧 8000 服务未停止：自动审批拒绝了停止旧服务的操作，返回 `blocked by policy`。本轮改在 8001 启动并验收新版，后续仅重启本轮自己启动的服务。请使用 8001 查看新功能。
+
+后续重点仍是部件语义边界、跨背面一致性、细腿重建和更连续的曲面 UV；本轮没有给这些问题写不存在的准确率或外观合格结论。
+'''
+(ROOT/'docs/PART_TOOLS_REVIEW_2026-11-12.md').write_text(report,encoding='utf-8')
+cards=[]
+for c in cases:
+    name=c['case'];cards.append(f'''<article data-category="{c['category']}"><h3>{names[name]}</h3><p>{html.escape(observations[name])}</p><div class="pair"><figure><img src="{name}_geometry.png" alt="普通点选实际结果"><figcaption>普通点选 · 默认视角试点</figcaption></figure><figure><img src="{name}_sam.png" alt="SAM 点击实际结果"><figcaption>SAM 候选 · 紫色为选区</figcaption></figure></div><details><summary>查看 UV 与单独导出</summary><div class="four">{''.join(f'<figure><img src="{name}_{s}.png"><figcaption>{label}</figcaption></figure>' for s,label in [('planar_front','平面棋盘诊断'),('unwrapped_front','展开后棋盘诊断'),('unwrapped_under','展开后底面'),('exported_part_front','原材质单独导出')])}</div><a href="{name}_part.glb">下载选中部件 GLB</a></details><a href="http://127.0.0.1:8001/?job={c['job']}">打开这个测试模型</a></article>''')
+page='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>部件工具实测与验收</title><style>body{margin:0;background:#f5f6fb;color:#20283b;font:16px/1.65 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1300px;margin:auto;padding:30px}article,.summary{background:white;border:1px solid #dce0e9;border-radius:14px;padding:22px;margin:20px 0}.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.four{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}figure{margin:0}img{max-width:100%;width:100%;object-fit:contain;border-radius:8px}figcaption{font-size:13px;color:#606a7c}a{color:#5541bb}select{font:inherit;padding:8px;max-width:100%}details{margin:16px 0}code{overflow-wrap:anywhere}[hidden]{display:none!important}.warning{border-left:4px solid #b5782a;padding-left:16px}@media(max-width:700px){main{padding:14px}.pair,.four{grid-template-columns:minmax(0,1fr)}} </style><main><h1>部件工具：五项交付与真实验收</h1><div class="summary"><strong>新版工作台：8001 端口</strong><p>8 个家具，7 个非空 SAM 候选，1 个安全拒绝。柜子与部分沙发仍选得不够准；候选数量不是准确率。</p><p>八家具 UV、移动、单独导出通过复测；70 项 Python 测试通过。保留原图、源模型、失败与重试记录。</p><a href="../../docs/PART_TOOLS_REVIEW_2026-11-12.md">详细报告与复现方法</a></div><p class="warning">紫色为可编辑候选，背面不会凭空补齐。棋盘为诊断材质，图集参数与视觉尺寸会变化。相机未做原图标定；没有商品相似度分数。</p>'''+f'''<p><a href="http://127.0.0.1:8001/?job={demo}">打开已保存的坐垫局部换色示例</a> · <a href="http://127.0.0.1:8001/?job={table['job']}">打开圆桌 UV 与拆装示例</a></p>'''+'''<label>按家具筛选 <select id="category"><option value="all">全部</option><option value="table">桌子</option><option value="chair">椅子</option><option value="sofa">沙发</option><option value="cabinet">柜子 / 架子</option></select></label>'''+''.join(cards)+'''<h2>同图引擎对照</h2><p>Hunyuan 使用已有结果，TripoSR 是本轮新增推理；细腿仍有缺陷，均未判定完整商品外观合格。</p><div class="four"><figure><img src="../../images/0012_Accent Chair.png"><figcaption>输入商品图</figcaption></figure><figure><img src="chair_hunyuan_generation_front.png"><figcaption>Hunyuan · 灰色几何</figcaption></figure><figure><img src="chair_triposr_generation_front.png"><figcaption>TripoSR · 本轮实际输出</figcaption></figure><figure><img src="generation_compare_ready.png"><figcaption>工作台对照窗口</figcaption></figure></div><h2>实际部件编辑与拆装</h2><div class="pair"><figure><img src="sam_saved_chair_part.png"><figcaption>SAM 保存为新部件后，仅局部换色</figcaption></figure><figure><img src="tools_exploded.png"><figcaption>拆解展示，不影响下载坐标</figcaption></figure></div><h2>可追溯记录</h2><p><a href="sam_browser.json">八家具 SAM</a> · <a href="geometric_baseline.json">普通点选</a> · <a href="real_edits.json">UV / 移动实测</a> · <a href="part_export_resource_checks.json">导出资源核对</a> · <a href="workflow_browser.json">浏览器流程</a> · <a href="visual_review.json">看图验收</a> · <a href="generation_outcomes.json">生成状态</a></p></main><script>document.getElementById('category').onchange=e=>document.querySelectorAll('[data-category]').forEach(c=>c.hidden=e.target.value!=='all'&&c.dataset.category!==e.target.value)</script></html>'''
+(OUT/'index.html').write_text(page,encoding='utf-8')
+files=['apps/web/src/samPartSelection.ts','apps/web/src/partInspection.ts','apps/web/src/Viewer.tsx','apps/web/src/AssetEditor.tsx','apps/web/src/ReconstructionCompare.tsx','services/api/part_prompt.py','services/api/app.py','services/api/models.py','scripts/part_tools.py','scripts/segment_part_views.py']
+(OUT/'delivery_manifest.json').write_text(json.dumps({'python_tests_passed':70,'eight_furniture_models':True,'sam_nonempty_candidates':success,'semantic_accuracy_measured':False,'new_inference_jobs':[newjob['id']],'server':'http://127.0.0.1:8001','files':{f:hashlib.sha256((ROOT/f).read_bytes()).hexdigest() for f in files}},ensure_ascii=False,indent=2),encoding='utf-8');print('Detailed report and dashboard written from measured records')

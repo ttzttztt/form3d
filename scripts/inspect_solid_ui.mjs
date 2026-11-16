@@ -1,0 +1,3 @@
+import{chromium}from'playwright';import fs from'node:fs/promises';
+const b=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
+try{const p=await b.newPage({viewport:{width:1600,height:1150}});p.on('pageerror',e=>console.log('PAGEERROR',e.message));await p.goto('http://127.0.0.1:8001/?job=56e8ad5b5ae240d1ba29da88d68ae920',{waitUntil:'networkidle'});await p.waitForTimeout(2000);console.log(JSON.stringify(await p.locator('button').allTextContents()));console.log('OVERLAYS',await p.locator('.viewer-overlay').allTextContents());await p.screenshot({path:'experiments/solid_parts_20261113/ui_debug.png'});}finally{await b.close();}

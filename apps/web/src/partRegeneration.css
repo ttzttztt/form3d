@@ -1,0 +1,77 @@
+.part-regeneration {
+  border: 1px solid #ddd8ed;
+  border-radius: 9px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.part-regeneration > p {
+  line-height: 1.6;
+}
+.part-regeneration label {
+  display: block;
+  margin: 8px 0;
+}
+.part-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 330px;
+  overflow: auto;
+  margin: 8px 0;
+}
+.part-reference-grid button {
+  padding: 5px;
+  border: 1px solid #d8d8e3;
+  border-radius: 7px;
+  min-width: 0;
+  background: white;
+}
+.part-reference-grid button[aria-pressed='true'] {
+  border: 2px solid #7955d7;
+}
+.part-reference-grid img {
+  display: block;
+  width: 100%;
+  height: 105px;
+  object-fit: contain;
+}
+.part-reference-grid span {
+  display: block;
+  font-size: 12px;
+}
+.part-regeneration a {
+  display: inline-block;
+  margin: 8px 6px;
+  overflow-wrap: anywhere;
+}
+.part-regeneration input[type='file'] {
+  max-width: 100%;
+}
+.part-auto-assessment {
+  background: #f4f7fb;
+  padding: 9px;
+  margin: 12px 0;
+  border-radius: 8px;
+}
+.part-auto-assessment img {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+.part-assessment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+.part-assessment { padding: 8px; border: 1px solid #cdd8df; border-radius: 7px; background: white; overflow-wrap: anywhere; }
+.part-assessment strong, .part-assessment span { display: block; font-size: 12px; }
+.part-assessment p { font-size: 12px; margin: 6px 0 0; line-height: 1.6; }
+.part-assessment.passed { border-color: #8cbcab; }
+.part-assessment.warning, .part-assessment.unverified { border-color: #d9b77b; }
+.part-assessment.blocked { border-color: #cd8585; }
+.part-candidate-list article { padding: 9px 0; border-top: 1px solid #dce3ec; }
+.part-extra-view { display: grid; grid-template-columns: 45px minmax(0, 1fr); gap: 6px; margin: 10px 0; align-items: center; }
+.part-extra-view img { width: 45px; height: 45px; object-fit: contain; }
+.part-extra-view span { overflow-wrap: anywhere; font-size: 12px; }
+.part-extra-view select, .part-extra-view button { min-width: 0; }
+.part-manual-options { margin: 12px 0; }
+.part-view-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.part-view-pair figure { margin: 0; min-width: 0; }
+.part-view-pair figcaption { text-align: center; font-size: 12px; }

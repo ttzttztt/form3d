@@ -1,0 +1,80 @@
+.semantic-parts-panel {
+  padding: 14px;
+  margin: 14px 0;
+  border: 1px solid #d8d4ee;
+  border-radius: 10px;
+  background: #f8f7ff;
+  min-width: 0;
+}
+.semantic-parts-panel p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.semantic-preview {
+  height: 400px;
+  margin: 14px 0;
+  min-width: 0;
+}
+.semantic-preview > .viewer {
+  height: 100%;
+  min-height: 0;
+}
+.semantic-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: #14223988;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.semantic-modal-content {
+  width: min(1100px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-sizing: border-box;
+}
+.semantic-modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.semantic-modal .semantic-preview {
+  height: min(58dvh, 600px);
+  overflow: hidden;
+  position: relative;
+}
+.semantic-parts-panel .semantic-modal .semantic-preview > .viewer {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+.semantic-modal-content button { min-height: 36px; padding: 6px 10px; }
+.semantic-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.semantic-group-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+}
+.semantic-colour {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+@media (max-width: 650px) {
+  .semantic-preview {
+    height: 330px;
+  }
+}

@@ -1,0 +1,5 @@
+import {chromium} from 'playwright';import fs from 'node:fs/promises';import path from 'node:path';
+const folder=path.resolve('experiments/multifurniture_20261113'),cases=JSON.parse(await fs.readFile(path.join(folder,'cases.json'),'utf8')),browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
+try{const page=await browser.newPage({viewport:{width:1600,height:1150}});page.setDefaultTimeout(120000);
+for(const c of cases.filter(c=>c.case.includes('sofa'))){await page.goto('http://127.0.0.1:8001/?job='+c.job,{waitUntil:'networkidle'});await page.locator('.viewer-overlay').waitFor({state:'hidden'});const view=page.getByTestId('model-viewer').first();await view.getByText('检查部件与拆解展示',{exact:true}).click();for(const [button,name] of [['查看正面','front'],['查看背面','back'],['查看底面','under']]){await view.getByRole('button',{name:button,exact:true}).click();await page.waitForTimeout(300);await view.screenshot({path:path.join(folder,c.case+'_'+name+'_source.png')});}console.log(c.case);}}
+finally{await browser.close();}

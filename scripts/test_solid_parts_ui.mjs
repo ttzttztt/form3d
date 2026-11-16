@@ -1,0 +1,33 @@
+import {chromium} from 'playwright';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const out=path.resolve(process.env.SOLID_UI_OUTPUT||'experiments/solid_parts_20261113'),base='http://127.0.0.1:8001';
+await fs.mkdir(out,{recursive:true});
+const c=JSON.parse(await fs.readFile(path.resolve(process.env.SOLID_CASES_PATH||'experiments/solid_parts_20261113/cases.json'),'utf8')).find(c=>c.case==='leather_sofa');
+const result={job:c.job,errors:[],checks:[]};
+const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox']});
+try{
+ const page=await browser.newPage({viewport:{width:1600,height:1150},acceptDownloads:true});page.setDefaultTimeout(240000);page.on('pageerror',e=>result.errors.push(e.message));
+ await page.goto(base+'/?job='+c.job,{waitUntil:'networkidle'});await page.locator('.viewer-overlay').waitFor({state:'hidden'});
+ const editor=page.getByRole('region',{name:'部件与材质编辑'});await editor.getByRole('button',{name:'拆分部件',exact:true}).click();
+ await editor.locator('summary').filter({hasText:'生成独立部件预览'}).click();
+ const root=`/api/jobs/${c.job}/asset`,initial=await(await page.request.get(base+root)).json(),baselineVersion=initial.version;
+ result.base_version=baselineVersion;
+ let pending=page.waitForResponse(r=>r.url().endsWith('/asset/completion-preview')&&r.request().method()==='POST');
+ await editor.getByRole('button',{name:'自动补齐当前范围的部件',exact:true}).click();let response=await pending;assert.equal(response.status(),200,await response.text());const preview=await response.json();result.preview_id=preview.preview_id;result.groups=preview.operation.groups.map(g=>({id:g.id,name:g.name,status:g.status}));
+ assert.ok(result.groups.every(g=>g.status==='reconstructed'));await editor.getByRole('button',{name:'预览底面',exact:true}).waitFor({state:'visible'});
+ await editor.getByRole('button',{name:'预览底面',exact:true}).click();await editor.getByRole('button',{name:'预览侧面',exact:true}).click();await editor.getByRole('button',{name:'预览背面',exact:true}).click();await editor.getByRole('button',{name:'预览正面',exact:true}).click();
+ const save=editor.getByRole('button',{name:'保存这个独立部件候选',exact:true});assert.ok(await save.isDisabled());let catalog=await(await page.request.get(base+root)).json();assert.equal(catalog.version,baselineVersion);
+ result.checks.push('real_geometry_preview_read_only_and_save_gated');
+ const wrong=await page.request.post(base+root+'/versions',{data:{operation:'reconstruct_parts',base_version:baselineVersion,part_ids:[catalog.parts[0].id],completion_preview_id:preview.preview_id}});assert.equal(wrong.status(),409);assert.equal((await(await page.request.get(base+root)).json()).version,baselineVersion);result.checks.push('changed_scope_cannot_commit_old_preview');
+ await page.screenshot({path:path.join(out,'ui_solid_desktop.png')});await page.setViewportSize({width:390,height:844});await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:path.join(out,'ui_solid_mobile.png')});await page.setViewportSize({width:1600,height:1150});
+ await editor.getByRole('checkbox',{name:'我已查看正面、侧面和底面，接受这个重建候选'}).check();pending=page.waitForResponse(r=>r.url().endsWith('/asset/versions')&&r.request().method()==='POST');await save.click();response=await pending;assert.equal(response.status(),201,await response.text());catalog=await response.json();result.solid_version=catalog.version;result.model_sha256=catalog.manifest.model_sha256;assert.equal(catalog.manifest.completion_preview_id,preview.preview_id);assert.equal(catalog.metrics.parts,3);assert.equal(catalog.editor_review_status,'unreviewed');result.checks.push('commits_exact_preview_with_three_logical_parts_and_unreviewed_status');
+ await page.locator('.viewer-overlay').waitFor({state:'hidden'});const group=catalog.groups.find(g=>g.semantic_kind==='bolster');assert.ok(group);result.bolster_group=group.id;
+ await editor.getByRole('button',{name:'换材质',exact:true}).click();await editor.getByRole('button',{name:'选择部件 '+group.name,exact:true}).click();const before=new Map(catalog.parts.map(p=>[p.id,p.material_signature]));
+ await editor.getByLabel('材质颜色',{exact:true}).evaluate(input=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'#2c8c7f');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));});
+ pending=page.waitForResponse(r=>r.url().endsWith('/asset/versions')&&r.request().method()==='POST');await editor.getByRole('button',{name:'保存当前材质效果',exact:true}).click();response=await pending;assert.equal(response.status(),201,await response.text());catalog=await response.json();assert.deepEqual(new Set(catalog.parts.filter(p=>p.material_signature!==before.get(p.id)).map(p=>p.id)),new Set(group.part_ids));result.material_version=catalog.version;result.checks.push('material_changes_complete_logical_bolster_only');
+ await editor.getByRole('button',{name:'拆分部件',exact:true}).click();await editor.locator('summary').filter({hasText:'部件移动与单独导出'}).click();const download=page.waitForEvent('download');await editor.getByRole('button',{name:'单独导出选中部件',exact:true}).click();await(await download).saveAs(path.join(out,'browser_solid_bolster.glb'));result.checks.push('browser_downloads_whole_reconstructed_bolster');
+ await page.screenshot({path:path.join(out,'ui_solid_material.png')});assert.deepEqual(result.errors,[]);
+}catch(e){result.failure=e.stack;throw e;}finally{await fs.writeFile(path.join(out,'ui_results.json'),JSON.stringify(result,null,2));await browser.close();}
+console.log(JSON.stringify(result));

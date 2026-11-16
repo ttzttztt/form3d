@@ -1,0 +1,4 @@
+# Optional CPU solid reconstruction, isolated from CUDA/ML dependencies.
+# .venv-hunyuan/Scripts/python.exe -m pip install --target .tools/geometry_extra --no-deps -r requirements-geometry.txt
+libigl==2.6.1
+manifold3d==3.5.5

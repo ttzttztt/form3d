@@ -1,0 +1,35 @@
+.completion-bounds-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.completion-bounds-grid input {
+  width: 100%;
+  min-width: 0;
+}
+.cut-preview {
+  margin: 12px 0;
+  min-width: 0;
+}
+.cut-preview-canvas {
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.cut-preview-canvas canvas {
+  display: block;
+  max-width: 100%;
+  touch-action: none;
+}
+.cut-preview .selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+@media (max-width: 650px) {
+  .completion-bounds-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,9 @@
+# Experimental isolated runtime. Do not install into the API environment.
+# The tested .venv-holo reuses .venv-parts packages via a local .pth file;
+# matching base versions are listed in requirements-parts.txt.
+-r requirements-parts.txt
+jaxtyping==0.3.3
+typeguard==2.13.3
+# torch_cluster is replaced only for HoloPart's FPS call with the tested real
+# NumPy greedy implementation in scripts/holopart_runtime.py. The regular-grid
+# decoder uses scikit-image marching cubes; no fake diso/Flash decoder is used.
