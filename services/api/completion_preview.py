@@ -24,7 +24,7 @@ def preview_completion(store,job,request):
     if reconstruct and not RECONSTRUCTION_LOCK.acquire(blocking=False):raise ValueError('已有独立部件预览正在计算，请稍后重试')
     try:
         with (directory/'worker.log').open('wb') as log:
-            result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'scripts/preview_complete_part.py'),'--input',str(source),'--request',str(directory/'request.json'),'--output',str(directory)],stdout=log,stderr=subprocess.STDOUT,timeout=360 if reconstruct else 180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'services/workers/preview_complete_part.py'),'--input',str(source),'--request',str(directory/'request.json'),'--output',str(directory)],stdout=log,stderr=subprocess.STDOUT,timeout=360 if reconstruct else 180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     finally:
         if reconstruct:RECONSTRUCTION_LOCK.release()
     if result.returncode:

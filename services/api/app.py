@@ -437,7 +437,7 @@ def create_app(data_dir=None):
         job=find_job(job_id)
         def work():
             source=source_for(store,job,body.version)
-            revision=(ROOT/'scripts/part_tools.py').read_bytes()+(ROOT/'scripts/edit_asset.py').read_bytes()
+            revision=(ROOT/'services/workers/part_tools.py').read_bytes()+(ROOT/'services/workers/edit_asset.py').read_bytes()
             digest=hashlib.sha256(source.read_bytes()+revision+json.dumps(sorted(set(body.part_ids))).encode()).hexdigest()
             folder=store.root/'jobs'/job_id/'part_exports'/digest;folder.mkdir(parents=True,exist_ok=True)
             with edit_locks.setdefault('export-'+job_id,threading.Lock()):
@@ -447,7 +447,7 @@ def create_app(data_dir=None):
                     interpreter=local_python('hunyuan-mini') or local_python('triposr')
                     if not interpreter:raise ValueError('本地导出环境未准备好')
                     with (folder/'worker.log').open('wb') as log:
-                        r=subprocess.run([interpreter,'-X','utf8',str(ROOT/'scripts/edit_asset.py'),'--input',str(source),'--request',str(folder/'request.json'),'--output',str(folder)],stdout=log,stderr=subprocess.STDOUT,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+                        r=subprocess.run([interpreter,'-X','utf8',str(ROOT/'services/workers/edit_asset.py'),'--input',str(source),'--request',str(folder/'request.json'),'--output',str(folder)],stdout=log,stderr=subprocess.STDOUT,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
                     if r.returncode:raise ValueError('部件导出失败，请检查选择；原模型保留')
                     from .geometry import validate_glb
                     write_json(folder/'validated.json',validate_glb(folder/'model.glb'))

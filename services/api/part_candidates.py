@@ -46,7 +46,7 @@ def run_candidates(store,job,folder,state,context,stage):
                 try:
                     state.update(progress_sequence=None,sampling_step=None,sampling_steps=None);stage('generating')
                     result['inference_this_candidate']=True;inferences.append(seed)
-                    command=[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/generate_hunyuan3d.py'),'--input',str(child/'reference.png'),'--output',str(child/'generated'),'--keep-background','--steps','50','--resolution','384','--seed',str(seed)]
+                    command=[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/generate_hunyuan3d.py'),'--input',str(child/'reference.png'),'--output',str(child/'generated'),'--keep-background','--steps','50','--resolution','384','--seed',str(seed)]
                     run_command(child,command,1800,progress,cancel_folder=folder)
                 finally:
                     GPU_LOCK.release()
@@ -65,7 +65,7 @@ def run_candidates(store,job,folder,state,context,stage):
                         try:info=json.loads(path.read_text(encoding='utf-8'))
                         except ValueError:return
                         if info.get('phase')!=state.get('optimization_phase'):state['optimization_phase']=info.get('phase');write_json(folder/'status.json',state)
-                stage('optimizing_shape');run_command(child,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/auto_part_optimization.py'),'--folder',str(child),'--stage','optimize'],600,cpu_progress,cancel_folder=folder)
+                stage('optimizing_shape');run_command(child,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/auto_part_optimization.py'),'--folder',str(child),'--stage','optimize'],600,cpu_progress,cancel_folder=folder)
             finally:RECONSTRUCTION_LOCK.release()
             for name in('model.glb','part.glb','diagnostic.glb'):validate_glb(child/'preview'/name)
             checks=json.loads((child/'checks.json').read_text(encoding='utf-8'));manifest=json.loads((child/'preview/manifest.json').read_text(encoding='utf-8'))

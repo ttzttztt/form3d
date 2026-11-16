@@ -23,7 +23,7 @@ def propose_part(store,job,body):
     if not GPU_LOCK.acquire(timeout=5):raise ValueError('显卡正在处理其他任务，请稍后重试辅助分割')
     try:
         with (folder/'worker.log').open('wb') as log:
-            r=subprocess.run([segmentation_python(),'-X','utf8',str(ROOT/'scripts/segment_part_views.py'),'--folder',str(folder)],stdout=log,stderr=subprocess.STDOUT,timeout=150,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            r=subprocess.run([segmentation_python(),'-X','utf8',str(ROOT/'services/workers/segment_part_views.py'),'--folder',str(folder)],stdout=log,stderr=subprocess.STDOUT,timeout=150,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if r.returncode:raise ValueError('SAM 点击候选未完成，请换个位置或用涂抹；运行日志已保留')
     finally:GPU_LOCK.release()
     result=json.loads((folder/'result.json').read_text(encoding='utf-8'))

@@ -164,7 +164,7 @@ def run_reference(store,job_id,identity):
         check_source(store,job_id,state);state.update(status='running',stage='waiting_gpu');write_json(folder/'status.json',state);gpu_wait(folder)
         try:
             if(folder/'cancel_requested').exists():raise ValueError('已取消，原模型保留')
-            state['stage']='extracting_reference';write_json(folder/'status.json',state);image=store.image(state['image_id']);target=job['request']['target']if state['reference_origin']=='original_photo'else{'x':0,'y':0,'width':1,'height':1};run_command(folder,[segmentation_python(),'-X','utf8',str(ROOT/'scripts/prepare_part_reference.py'),'--input',str(store.root/image['normalized_path']),'--output',str(folder),'--kind',state['kind'],'--target',*[str(target[k])for k in('x','y','width','height')]],360)
+            state['stage']='extracting_reference';write_json(folder/'status.json',state);image=store.image(state['image_id']);target=job['request']['target']if state['reference_origin']=='original_photo'else{'x':0,'y':0,'width':1,'height':1};run_command(folder,[segmentation_python(),'-X','utf8',str(ROOT/'services/workers/prepare_part_reference.py'),'--input',str(store.root/image['normalized_path']),'--output',str(folder),'--kind',state['kind'],'--target',*[str(target[k])for k in('x','y','width','height')]],360)
         finally:GPU_LOCK.release()
         check_source(store,job_id,state)
         if(folder/'cancel_requested').exists():raise ValueError('已取消，原模型保留')
@@ -245,7 +245,7 @@ def run_surface_repair(store,job_id,identity):
         if not RECONSTRUCTION_LOCK.acquire(blocking=False):raise ValueError('已有部件修复正在计算，请稍后重试')
         try:
             state.update(status='running',stage='preserving_source');write_json(folder/'status.json',state)
-            run_command(folder,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/replace_generated_part.py'),'--input',str(source),'--request',str(folder/'request.json'),'--output',str(folder/'preview')],360)
+            run_command(folder,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/replace_generated_part.py'),'--input',str(source),'--request',str(folder/'request.json'),'--output',str(folder/'preview')],360)
         finally:RECONSTRUCTION_LOCK.release()
         finish_preview(store,job_id,folder,state,started)
     except Exception as exc:
@@ -267,9 +267,9 @@ def run_regeneration(store,job_id,identity):
                     try:data=json.loads(path.read_text(encoding='utf-8'))
                     except ValueError:return
                     if data.get('sequence')!=state.get('progress_sequence'):state.update(progress_sequence=data.get('sequence'),sampling_step=data.get('sampling_step'),sampling_steps=data.get('sampling_steps'));write_json(folder/'status.json',state)
-            run_command(folder,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/generate_hunyuan3d.py'),'--input',str(folder/'reference.png'),'--output',str(folder/'generated'),'--keep-background','--steps','50','--resolution','384'],1800,progress)
+            run_command(folder,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/generate_hunyuan3d.py'),'--input',str(folder/'reference.png'),'--output',str(folder/'generated'),'--keep-background','--steps','50','--resolution','384'],1800,progress)
         finally:GPU_LOCK.release()
-        validate_glb(folder/'generated/model.glb');state.update(stage='aligning',generated_valid=True);write_json(folder/'status.json',state);source=check_source(store,job_id,state);alignment=folder/'alignment_worker';alignment.mkdir();run_command(alignment,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/replace_generated_part.py'),'--input',str(source),'--candidate',str(folder/'generated/model.glb'),'--request',str(folder/'request.json'),'--output',str(folder/'preview')],360,cancel_folder=folder)
+        validate_glb(folder/'generated/model.glb');state.update(stage='aligning',generated_valid=True);write_json(folder/'status.json',state);source=check_source(store,job_id,state);alignment=folder/'alignment_worker';alignment.mkdir();run_command(alignment,[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/replace_generated_part.py'),'--input',str(source),'--candidate',str(folder/'generated/model.glb'),'--request',str(folder/'request.json'),'--output',str(folder/'preview')],360,cancel_folder=folder)
         finish_preview(store,job_id,folder,state,started)
     except Exception as exc:state.update(status='cancelled'if(folder/'cancel_requested').exists()else'failed',stage='failed',error=str(exc)if isinstance(exc,ValueError)else'部件重生成未完成，原模型保留');write_json(folder/'status.json',state)
 

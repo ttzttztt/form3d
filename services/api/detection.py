@@ -11,7 +11,7 @@ from .gpu import GPU_LOCK
 ROOT = Path(__file__).resolve().parents[2]
 MODEL = ROOT / ".models" / "grounding-dino-tiny"
 LOCK = GPU_LOCK
-DETECTOR_REVISION = hashlib.sha256((ROOT / "scripts" / "detect_objects.py").read_bytes()).hexdigest()[:12]
+DETECTOR_REVISION = hashlib.sha256((ROOT / "services" / "workers" / "detect_objects.py").read_bytes()).hexdigest()[:12]
 
 
 def vision_python():
@@ -42,7 +42,7 @@ def analyze_image(store, image_id):
         with LOCK:
             store.update_image(image_id, lambda item: item.update(analysis={"status": "running", "objects": []}))
             output = store.root / "images" / image_id / "detection.json"
-            completed = subprocess.run([vision_python(), str(ROOT / "scripts" / "detect_objects.py"),
+            completed = subprocess.run([vision_python(), str(ROOT / "services" / "workers" / "detect_objects.py"),
                                         "--input", str(store.root / image["normalized_path"]), "--output", str(output),
                                         "--model", str(MODEL), "--device", os.getenv("VISION_DEVICE", "auto")],
                                        capture_output=True, timeout=240, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

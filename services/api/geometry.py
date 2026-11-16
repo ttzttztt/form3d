@@ -139,7 +139,7 @@ def validate_glb(path):
     node = shutil.which("node")
     if not node:
         return {"status": "not_run", "reason": "node_not_available"}
-    script = Path(__file__).resolve().parents[2] / "scripts" / "check_asset.cjs"
+    script = Path(__file__).resolve().parents[2] / "services" / "workers" / "check_asset.cjs"
     result = subprocess.run([node, str(script), str(path.resolve())], capture_output=True, timeout=60,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:

@@ -22,7 +22,7 @@ def plan_completion(store,job,request):
     directory=store.root/'jobs'/job['id']/'completion_plans'/uuid.uuid4().hex;directory.mkdir(parents=True)
     (directory/'request.json').write_text(json.dumps(request.model_dump(),ensure_ascii=False,indent=2),encoding='utf-8')
     with (directory/'worker.log').open('wb') as log:
-        result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'scripts/plan_complete_part.py'),'--input',str(source),'--request',str(directory/'request.json'),'--output',str(directory/'plan.json')],stdout=log,stderr=subprocess.STDOUT,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'services/workers/plan_complete_part.py'),'--input',str(source),'--request',str(directory/'request.json'),'--output',str(directory/'plan.json')],stdout=log,stderr=subprocess.STDOUT,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if result.returncode:
         details=(directory/'worker.log').read_text(encoding='utf-8',errors='replace');errors=[line.split('ValueError: ',1)[1] for line in details.splitlines() if line.startswith('ValueError: ')]
         raise ValueError(errors[-1][:200] if errors else '范围诊断未完成，原版本保留')
@@ -35,7 +35,7 @@ def inspect_quality(store,job,version=None):
         interpreter=local_python('hunyuan-mini') or local_python('triposr')
         if not interpreter:raise ValueError('本地检查环境未准备好')
         temporary=directory/(uuid.uuid4().hex+'.json')
-        result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'scripts/inspect_edit_quality.py'),'--input',str(source),'--output',str(temporary)],capture_output=True,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        result=subprocess.run([interpreter,'-X','utf8',str(ROOT/'services/workers/inspect_edit_quality.py'),'--input',str(source),'--output',str(temporary)],capture_output=True,timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if result.returncode:raise ValueError('几何检查未完成，原模型保留')
         temporary.replace(path)
     return {'version':version,'model_sha256':digest,**json.loads(path.read_text(encoding='utf-8'))}
@@ -123,7 +123,7 @@ def edit_asset(store,job_id,request):
         interpreter=local_python('hunyuan-mini') or local_python('triposr')
         if not interpreter:raise ValueError('资产编辑的本地 Python 环境未准备好')
         with (directory/'edit.log').open('wb') as log:
-            result=subprocess.run([interpreter,'-X','utf8','-u',str(ROOT/'scripts/edit_asset.py'),'--input',str(source),
+            result=subprocess.run([interpreter,'-X','utf8','-u',str(ROOT/'services/workers/edit_asset.py'),'--input',str(source),
                                    '--request',str(directory/'request.json'),'--output',str(directory)],stdout=log,stderr=subprocess.STDOUT,
                                   timeout=180,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if result.returncode:

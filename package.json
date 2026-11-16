@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --config apps/web/vite.config.ts",
     "build": "tsc -p apps/web/tsconfig.json && vite build --config apps/web/vite.config.ts",
-    "test:e2e": "node scripts/test_workbench.mjs",
-    "format": "prettier --write \"apps/web/src/**/*.{ts,tsx,css}\" apps/web/vite.config.ts scripts/test_workbench.mjs scripts/check_asset.cjs"
+    "test:js": "node tests/js/run.mjs",
+    "test:e2e": "node tests/e2e/test_workbench.mjs",
+    "format": "prettier --write \"apps/web/src/**/*.{ts,tsx,css}\" apps/web/vite.config.ts \"tests/**/*.mjs\" services/workers/check_asset.cjs",
+    "format:check": "prettier --check \"apps/web/src/**/*.{ts,tsx,css}\" apps/web/vite.config.ts"
   },
   "dependencies": {
     "gltf-validator": "^2.0.0-dev.3.10",

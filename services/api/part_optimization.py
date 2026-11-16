@@ -97,7 +97,7 @@ def copy_reference_cache(store,job,state,destination):
 
 def copy_generation_cache(store,job,state,destination,seed=42):
     """Reuse only exact-reference raw shapes; never reuse pose or adoption."""
-    worker_sha=digest(ROOT/'scripts/generate_hunyuan3d.py')
+    worker_sha=digest(ROOT/'services/workers/generate_hunyuan3d.py')
     for candidate_job in store.jobs():
         if candidate_job['request']['image_id']!=job['request']['image_id']:continue
         root=store.root/'jobs'/candidate_job['id']
@@ -137,7 +137,7 @@ def run_optimization(store,job_id,identity):
             try:
                 stage('extracting_reference')
                 target=job['request']['target']
-                command('extract',[segmentation_python(),'-X','utf8',str(ROOT/'scripts/prepare_part_reference.py'),'--input',context['photo'],'--output',str(references),'--kind',state['kind'],'--detect-parts','--target',*[str(target[k])for k in('x','y','width','height')]],360)
+                command('extract',[segmentation_python(),'-X','utf8',str(ROOT/'services/workers/prepare_part_reference.py'),'--input',context['photo'],'--output',str(references),'--kind',state['kind'],'--detect-parts','--target',*[str(target[k])for k in('x','y','width','height')]],360)
             finally:GPU_LOCK.release()
         for index,view in enumerate(context.get('views',[])):
             location=folder/'views'/str(index);view_refs=location/'references';location.mkdir(parents=True,exist_ok=True)
@@ -148,19 +148,19 @@ def run_optimization(store,job_id,identity):
             try:
                 stage('extracting_additional_view');target=view['target']
                 flags=['--whole-product-mask']if image_background_kind(view['photo'])=='scene'else[]
-                command(f'view_{index}_extract',[segmentation_python(),'-X','utf8',str(ROOT/'scripts/prepare_part_reference.py'),'--input',view['photo'],'--output',str(view_refs),'--kind',state['kind'],'--detect-parts',*flags,'--target',*[str(target[k])for k in('x','y','width','height')]],360)
+                command(f'view_{index}_extract',[segmentation_python(),'-X','utf8',str(ROOT/'services/workers/prepare_part_reference.py'),'--input',view['photo'],'--output',str(view_refs),'--kind',state['kind'],'--detect-parts',*flags,'--target',*[str(target[k])for k in('x','y','width','height')]],360)
             except ValueError as exc:
                 if(folder/'cancel_requested').exists():raise
                 state.update(status='needs_input',stage='needs_input',error='补充视图未得到可对应的部件：'+str(exc));write_json(folder/'status.json',state);return
             finally:GPU_LOCK.release()
-        worker=[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/auto_part_optimization.py'),'--folder',str(folder)]
+        worker=[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/auto_part_optimization.py'),'--folder',str(folder)]
         stage('matching_reference');command('analyze',worker+['--stage','analyze'],360)
         plan=json.loads((folder/'analysis.json').read_text(encoding='utf-8'))
         refinements=([folder]if plan.get('needs_guided_reference')else[])+[folder/'views'/str(v['index'])for v in plan.get('additional_views',[])if v.get('needs_guided_reference')]
         for index,location in enumerate(refinements):
             stage('waiting_gpu');gpu_wait(folder)
             try:
-                stage('refining_reference');command('refine_'+str(index),[segmentation_python(),'-X','utf8',str(ROOT/'scripts/refine_photo_part.py'),'--output',str(location/'references'),'--hint',str(location/'hint.png'),'--other',str(location/'other.png')],180)
+                stage('refining_reference');command('refine_'+str(index),[segmentation_python(),'-X','utf8',str(ROOT/'services/workers/refine_photo_part.py'),'--output',str(location/'references'),'--hint',str(location/'hint.png'),'--other',str(location/'other.png')],180)
             finally:GPU_LOCK.release()
             (location/'guided_done').touch()
         if refinements:

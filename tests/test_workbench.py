@@ -21,6 +21,9 @@ from services.api.store import Store
 from services.api.assistant_assets import attach_asset
 from services.api.preflight import InputNeedsAttention
 from services.api.output_quality import OutputNeedsAttention
+from services.api.local3d import local_python
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def picture():
@@ -50,6 +53,7 @@ class WorkbenchTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
+    @unittest.skipUnless((ROOT / 'library' / 'catalog.json').is_file(), 'library/ assets are not in this checkout (see docs/ASSETS.md)')
     def test_curated_samples_use_the_central_library(self):
         samples = self.client.get('/api/samples').json()
         self.assertEqual(len(samples), 4)
@@ -425,6 +429,7 @@ class WorkbenchTests(unittest.TestCase):
         removed=self.client.post(root+'/reference-views',json={'image_ids':[]})
         self.assertEqual(len(removed.json()['reference_views']),1)
 
+    @unittest.skipUnless(local_python('hunyuan-mini') or local_python('triposr'), 'asset-editing Python environment (.venv-hunyuan/.venv-3d) not installed')
     def test_complete_groups_merge_assign_and_quality_contracts(self):
         task=self.finished(self.create());root=f'/api/jobs/{task["id"]}'
         original=self.client.get(root+'/asset').json()

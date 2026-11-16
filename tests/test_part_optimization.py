@@ -119,7 +119,7 @@ class PartOptimizationTests(unittest.TestCase):
         _,folder=self.start();generated=folder/'generated';generated.mkdir()
         shutil.copyfile(self.source,generated/'model.glb');image=self.store.root/'images'/('b'*32)/'normalized.png';shutil.copyfile(image,generated/'foreground.png')
         state=json.loads((folder/'status.json').read_text(encoding='utf-8'));state.update(generated_valid=True,reference_sha256='d'*64);tasks.write_json(folder/'status.json',state)
-        summary={'model':'Hunyuan3D-2mini','mode':'shape_only','steps':50,'resolution':384,'seed':42,'input_sha256':state['reference_sha256'],'worker_revision':tasks.digest(service.ROOT/'scripts/generate_hunyuan3d.py'),'model_sha256':tasks.digest(generated/'model.glb'),'foreground_sha256':tasks.digest(generated/'foreground.png')}
+        summary={'model':'Hunyuan3D-2mini','mode':'shape_only','steps':50,'resolution':384,'seed':42,'input_sha256':state['reference_sha256'],'worker_revision':tasks.digest(service.ROOT/'services/workers/generate_hunyuan3d.py'),'model_sha256':tasks.digest(generated/'model.glb'),'foreground_sha256':tasks.digest(generated/'foreground.png')}
         tasks.write_json(generated/'local_summary.json',summary)
         target=self.folder/'cache_target';result=service.copy_generation_cache(self.store,self.job,state,target)
         self.assertTrue(result['raw_geometry_only']);self.assertEqual((target/'model.glb').read_bytes(),self.source.read_bytes())

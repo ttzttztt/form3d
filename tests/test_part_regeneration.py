@@ -232,7 +232,7 @@ class PartRegenerationTests(unittest.TestCase):
         self.assertEqual(json.loads((ready_folder/'status.json').read_text(encoding='utf-8'))['status'], 'ready')
 
     def test_transparent_reference_keeps_alpha_and_does_not_claim_segmentation(self):
-        from scripts.prepare_part_reference import run
+        from services.workers.prepare_part_reference import run
         from types import SimpleNamespace
         path = self.store.root/'transparent.png'
         source = Image.new('RGBA', (64, 64), (30, 60, 90, 0))

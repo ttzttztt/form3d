@@ -77,7 +77,7 @@ def generate_local(store, job_id, input_path, directory, check_cancelled, remove
                 image=store.image(job['request']['image_id'])
                 target=job['request']['target']
                 store.event(job_id,'segment','SAM 2 正在按目标框精细分割')
-                segment_command=[segmentation_python(),'-u',str(ROOT/'scripts'/'segment_target.py'),
+                segment_command=[segmentation_python(),'-u',str(ROOT/'services/workers'/'segment_target.py'),
                     '--input',str(store.root/image['normalized_path']),'--prepared',str(input_path),
                     '--target',*[str(target[key]) for key in ('x','y','width','height')],
                     '--output',str(directory)]
@@ -104,7 +104,7 @@ def generate_local(store, job_id, input_path, directory, check_cancelled, remove
         from .segmentation import image_background_kind
         if not preflight_python():raise ValueError('输入清理环境尚未安装，请安装 requirements-preflight.txt')
         store.event(job_id,'input_check','检查尺寸文字、主体掩码与遮挡物')
-        preflight_command=[preflight_python(),'-u',str(ROOT/'scripts/prepare_local_input.py'),
+        preflight_command=[preflight_python(),'-u',str(ROOT/'services/workers/prepare_local_input.py'),
             '--input',str(input_path),'--source',str(original_path),'--prepared',str(prepared_path),
             '--output',str(directory),'--kind',image_background_kind(original_path),
             '--object-label',category if category not in {'unknown','other'} else job['request'].get('object_label','')]
@@ -164,7 +164,7 @@ def generate_local(store, job_id, input_path, directory, check_cancelled, remove
             hunyuan=candidate_engine=='hunyuan-mini'
             detail=job['request'].get('local_quality','balanced')=='structure'
             resolution=(384 if detail else 256) if hunyuan else (256 if detail else 192)
-            command=[local_python(candidate_engine),'-u',str(ROOT/'scripts'/('generate_hunyuan3d.py' if hunyuan else 'generate_local3d.py')),
+            command=[local_python(candidate_engine),'-u',str(ROOT/'services/workers'/('generate_hunyuan3d.py' if hunyuan else 'generate_local3d.py')),
                      '--input',str(input_path),'--output',str(candidate),'--resolution',str(resolution),'--keep-background']
             if hunyuan:command+=['--steps','50' if detail else '30']
             store.event(job_id,'shape_attempt','本地生成尝试 %d/%d：%s'%(index,len(engines),candidate_engine))
@@ -177,7 +177,7 @@ def generate_local(store, job_id, input_path, directory, check_cancelled, remove
                     store.event(job_id,'output_retry','首次生成未成功，改用另一本地模型，最多再尝试一次');continue
                 raise ValueError('本地生成尝试均未成功，日志保留；未发布模型')
             store.event(job_id,'geometry_check','检查输出体积、方块退化和几何连通片')
-            quality_command=[local_python(candidate_engine),'-u',str(ROOT/'scripts/analyze_geometry.py'),
+            quality_command=[local_python(candidate_engine),'-u',str(ROOT/'services/workers/analyze_geometry.py'),
                              '--input',str(candidate/'model.glb'),'--output',str(candidate/'geometry_quality.json'),'--category',category]
             if run_worker(quality_command,candidate/'geometry_check.log',120):
                 raise ValueError('输出几何检查未能完成，未发布未经检查的候选')

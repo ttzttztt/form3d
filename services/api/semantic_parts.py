@@ -12,7 +12,7 @@ from .semantic_validation import validate_semantic_proposal
 SCAN_LOCK=threading.Lock()
 
 def blender_path():
-    candidates=[os.getenv('BLENDER_EXE',''),shutil.which('blender') or '',r'D:\Blender 5.1\blender.exe']
+    candidates=[os.getenv('BLENDER_EXE',''),shutil.which('blender') or '',r'D:\Blender 5.1\blender.exe',r'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe','/Applications/Blender.app/Contents/MacOS/Blender','/usr/bin/blender','/snap/bin/blender']
     return next((str(Path(p).resolve()) for p in candidates if p and Path(p).is_file()),None)
 
 def semantic_status():
@@ -20,7 +20,7 @@ def semantic_status():
 
 def revision():
     files=['render_semantic_views.py','detect_semantic_views.py','semantic_mapping.py','semantic_asset.py','supported_regions.py','cylinder_evidence.py','build_semantic_asset.py']
-    return hashlib.sha256(b''.join((ROOT/'scripts'/p).read_bytes() for p in files)).hexdigest()
+    return hashlib.sha256(b''.join((ROOT/'services/workers'/p).read_bytes() for p in files)).hexdigest()
 
 def write_json(path,data):
     temporary=path.with_suffix('.writing');temporary.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');temporary.replace(path)
@@ -70,12 +70,12 @@ def run_scan(store,job_id,identity,source):
             lines=(folder/(name+'.log')).read_text(encoding='utf-8',errors='replace').splitlines();errors=[line.split('ValueError: ',1)[1] for line in lines if line.startswith('ValueError: ')]
             raise ValueError(errors[-1][:220] if errors else 'AI 整体识别未完成，原模型保留；运行日志已保存')
     try:
-        stage('rendering');run('render',[blender_path(),'-b','-t','6','--python-exit-code','1','--python',str(ROOT/'scripts/render_semantic_views.py'),'--','--input',source,'--output',str(folder)],240)
+        stage('rendering');run('render',[blender_path(),'-b','-t','6','--python-exit-code','1','--python',str(ROOT/'services/workers/render_semantic_views.py'),'--','--input',source,'--output',str(folder)],240)
         stage('waiting_gpu')
         if not GPU_LOCK.acquire(timeout=300):raise ValueError('显卡忙，请稍后重新识别')
-        try:stage('recognizing');run('recognize',[segmentation_python(),'-X','utf8',str(ROOT/'scripts/detect_semantic_views.py'),'--folder',str(folder),'--category',state['key']['category']],360)
+        try:stage('recognizing');run('recognize',[segmentation_python(),'-X','utf8',str(ROOT/'services/workers/detect_semantic_views.py'),'--folder',str(folder),'--category',state['key']['category']],360)
         finally:GPU_LOCK.release()
-        stage('grouping');run('group',[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'scripts/build_semantic_asset.py'),'--input',source,'--folder',str(folder)],240)
+        stage('grouping');run('group',[local_python('hunyuan-mini'),'-X','utf8',str(ROOT/'services/workers/build_semantic_asset.py'),'--input',source,'--folder',str(folder)],240)
         validate_glb(folder/'model.glb');validate_glb(folder/'style.glb')
         if store.job(job_id).get('current_asset_version','original')!=state['key']['version'] or hashlib.sha256(Path(source).read_bytes()).hexdigest()!=state['key']['source_sha256']:raise ValueError('识别期间编辑版本发生变化，请重新识别')
         if revision()!=state['key']['worker_revision']:raise ValueError('识别算法已更新，请重新识别，当前模型保留')
