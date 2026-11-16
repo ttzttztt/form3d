@@ -1,4 +1,5 @@
 """Single-user local store. Short transactions protect task state transitions."""
+
 import json
 import sqlite3
 import threading
@@ -21,7 +22,9 @@ class Store:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("CREATE TABLE IF NOT EXISTS images (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
-            db.execute("CREATE TABLE IF NOT EXISTS requests (key TEXT PRIMARY KEY, hash TEXT NOT NULL, job_id TEXT NOT NULL)")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS requests (key TEXT PRIMARY KEY, hash TEXT NOT NULL, job_id TEXT NOT NULL)"
+            )
 
     @contextmanager
     def connect(self):
@@ -100,4 +103,5 @@ class Store:
             item.update(changes)
             item["stage"] = stage
             item["events"].append({"at": now(), "stage": stage, "message": message})
+
         return self.update(job_id, apply)

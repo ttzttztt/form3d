@@ -1,7 +1,75 @@
-import {build} from 'esbuild';import assert from 'node:assert/strict';import fs from 'node:fs/promises';
-const bundle=await build({stdin:{contents:"export * from './apps/web/src/selectionReview';export {topology} from './apps/web/src/pointSelection';export * as THREE from 'three';",resolveDir:process.cwd(),loader:'ts'},bundle:true,platform:'node',format:'esm',write:false});const {THREE,refineSelection,selectionBoundary,uvSeams,topology}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
-const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2,5,5)),data=topology(mesh.geometry),all=new Uint8Array(data.count).fill(1),evidence=all.slice();const hole=Array.from({length:data.count},(_,i)=>i).find(i=>[0,1,2].every(k=>data.adjacent[i*3+k]>=0));all[hole]=0;
-let result=refineSelection(mesh,all,new Set(),new Set(),evidence);assert.equal(result.mask[hole],1);assert.equal(result.filled,1);evidence[hole]=0;result=refineSelection(mesh,all,new Set(),new Set(),evidence);assert.equal(result.mask[hole],0);result=refineSelection(mesh,new Uint8Array(data.count),new Set([hole]),new Set([hole+1]),evidence);assert.equal(result.mask[hole],1);assert.equal(result.mask[hole+1],0);
-const cube=new THREE.Mesh(new THREE.BoxGeometry());const before=Array.from(cube.geometry.index.array);assert.equal(selectionBoundary(cube,[0,1]).length,24);assert.deepEqual(Array.from(cube.geometry.index.array),before);
-const g=new THREE.PlaneGeometry().toNonIndexed(),uv=g.getAttribute('uv');const original=uvSeams(g).lines.length;const changed=g.clone();for(let i=0;i<3;i++)changed.getAttribute('uv').setX(i,uv.getX(i)+.25);assert.ok(uvSeams(changed).lines.length>original);assert.equal(uvSeams(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0],3))),undefined);
-const checks=['fill_observed_planar_one_face_hole','never_fill_unobserved_hole','positive_prompt_locked','negative_prompt_locked','rectangle_boundary_excludes_internal_edge','original_face_indices_unchanged','detect_uv_discontinuity','missing_uv_reported'];await fs.writeFile('.data/checks/test_selection_review/selection_review_unit.json',JSON.stringify({passed:checks.length,checks},null,2));console.log(JSON.stringify({passed:checks.length,checks}));
+import { build } from 'esbuild';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const bundle = await build({
+  stdin: {
+    contents:
+      "export * from './apps/web/src/selectionReview';export {topology} from './apps/web/src/pointSelection';export * as THREE from 'three';",
+    resolveDir: process.cwd(),
+    loader: 'ts',
+  },
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false,
+});
+const { THREE, refineSelection, selectionBoundary, uvSeams, topology } = await import(
+  'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
+);
+const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2, 5, 5)),
+  data = topology(mesh.geometry),
+  all = new Uint8Array(data.count).fill(1),
+  evidence = all.slice();
+const hole = Array.from({ length: data.count }, (_, i) => i).find((i) =>
+  [0, 1, 2].every((k) => data.adjacent[i * 3 + k] >= 0),
+);
+all[hole] = 0;
+let result = refineSelection(mesh, all, new Set(), new Set(), evidence);
+assert.equal(result.mask[hole], 1);
+assert.equal(result.filled, 1);
+evidence[hole] = 0;
+result = refineSelection(mesh, all, new Set(), new Set(), evidence);
+assert.equal(result.mask[hole], 0);
+result = refineSelection(
+  mesh,
+  new Uint8Array(data.count),
+  new Set([hole]),
+  new Set([hole + 1]),
+  evidence,
+);
+assert.equal(result.mask[hole], 1);
+assert.equal(result.mask[hole + 1], 0);
+const cube = new THREE.Mesh(new THREE.BoxGeometry());
+const before = Array.from(cube.geometry.index.array);
+assert.equal(selectionBoundary(cube, [0, 1]).length, 24);
+assert.deepEqual(Array.from(cube.geometry.index.array), before);
+const g = new THREE.PlaneGeometry().toNonIndexed(),
+  uv = g.getAttribute('uv');
+const original = uvSeams(g).lines.length;
+const changed = g.clone();
+for (let i = 0; i < 3; i++) changed.getAttribute('uv').setX(i, uv.getX(i) + 0.25);
+assert.ok(uvSeams(changed).lines.length > original);
+assert.equal(
+  uvSeams(
+    new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3),
+    ),
+  ),
+  undefined,
+);
+const checks = [
+  'fill_observed_planar_one_face_hole',
+  'never_fill_unobserved_hole',
+  'positive_prompt_locked',
+  'negative_prompt_locked',
+  'rectangle_boundary_excludes_internal_edge',
+  'original_face_indices_unchanged',
+  'detect_uv_discontinuity',
+  'missing_uv_reported',
+];
+await fs.writeFile(
+  '.data/checks/test_selection_review/selection_review_unit.json',
+  JSON.stringify({ passed: checks.length, checks }, null, 2),
+);
+console.log(JSON.stringify({ passed: checks.length, checks }));

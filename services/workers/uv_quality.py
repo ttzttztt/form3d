@@ -1,4 +1,5 @@
 """UV diagnostics used to choose between projections, never photo fidelity scores."""
+
 import numpy as np
 
 
@@ -29,10 +30,10 @@ def uv_diagnostics(vertices, faces, uv):
     tex = uv[faces]
     ue, uo = tex[:, 1] - tex[:, 0], tex[:, 2] - tex[:, 0]
     uv_area = abs(ue[:, 0] * uo[:, 1] - ue[:, 1] * uo[:, 0]) / 2
-    valid = area > diagonal ** 2 * 1e-12
+    valid = area > diagonal**2 * 1e-12
     length = np.linalg.norm(edge[valid], axis=1)
     x = np.sum(edge[valid] * other[valid], axis=1) / np.maximum(length, 1e-15)
-    y = np.sqrt(np.maximum(np.sum(other[valid] ** 2, axis=1) - x*x, 1e-30))
+    y = np.sqrt(np.maximum(np.sum(other[valid] ** 2, axis=1) - x * x, 1e-30))
     jacobian = np.zeros((valid.sum(), 2, 2))
     jacobian[:, :, 0] = ue[valid] / np.maximum(length[:, None], 1e-15)
     jacobian[:, :, 1] = (uo[valid] - jacobian[:, :, 0] * x[:, None]) / y[:, None]
@@ -41,10 +42,10 @@ def uv_diagnostics(vertices, faces, uv):
     weights = area[valid]
     total = max(float(weights.sum()), 1e-15)
     return {
-        'normalized_seam_length': float(lengths[seams].sum() / diagonal),
-        'collapsed_geometry_area_fraction': float(area[uv_area < 1e-12].sum() / max(float(area.sum()), 1e-15)),
-        'area_fraction_anisotropy_over_4': float(weights[ratio > 4].sum() / total),
-        'geometric_mean_anisotropy': float(np.exp(np.sum(weights * np.log(np.clip(ratio, 1, 1000))) / total)),
+        "normalized_seam_length": float(lengths[seams].sum() / diagonal),
+        "collapsed_geometry_area_fraction": float(area[uv_area < 1e-12].sum() / max(float(area.sum()), 1e-15)),
+        "area_fraction_anisotropy_over_4": float(weights[ratio > 4].sum() / total),
+        "geometric_mean_anisotropy": float(np.exp(np.sum(weights * np.log(np.clip(ratio, 1, 1000))) / total)),
     }
 
 
@@ -52,8 +53,8 @@ def prefer_proxy(baseline, candidate):
     """Conservative heuristic: visibly fewer seams, bounded area stretch/collapse."""
     return bool(
         all(np.isfinite(v) for v in [*baseline.values(), *candidate.values()])
-        and candidate['normalized_seam_length'] < baseline['normalized_seam_length'] * .95
-        and candidate['geometric_mean_anisotropy'] <= baseline['geometric_mean_anisotropy'] * 1.1
-        and candidate['area_fraction_anisotropy_over_4'] <= .005
-        and candidate['collapsed_geometry_area_fraction'] <= .001
+        and candidate["normalized_seam_length"] < baseline["normalized_seam_length"] * 0.95
+        and candidate["geometric_mean_anisotropy"] <= baseline["geometric_mean_anisotropy"] * 1.1
+        and candidate["area_fraction_anisotropy_over_4"] <= 0.005
+        and candidate["collapsed_geometry_area_fraction"] <= 0.001
     )

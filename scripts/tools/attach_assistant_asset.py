@@ -18,6 +18,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     directory = Path(args.directory).resolve()
     notes = json.loads((directory / "modeling_notes.json").read_text(encoding="utf-8"))
-    result = attach_asset(Store(Path(os.getenv("IMG3D_DATA_DIR", str(ROOT / ".data")))), args.job,
-                          directory / "model.glb", notes, directory / "preview.png", directory / "source.blend")
-    print(json.dumps({"job_id": result["id"], "status": result["status"], "model_url": result.get("model_url")}, ensure_ascii=True))
+    result = attach_asset(
+        Store(Path(os.getenv("IMG3D_DATA_DIR", str(ROOT / ".data")))),
+        args.job,
+        directory / "model.glb",
+        notes,
+        directory / "preview.png",
+        directory / "source.blend",
+    )
+    print(
+        json.dumps(
+            {"job_id": result["id"], "status": result["status"], "model_url": result.get("model_url")},
+            ensure_ascii=True,
+        )
+    )

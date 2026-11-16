@@ -1,0 +1,25 @@
+[project]
+name = "form3d"
+version = "0.1.0"
+description = "Local furniture image-to-3D workbench"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = [".tools", ".venv*", "node_modules", ".data", ".models"]
+
+[tool.ruff.lint]
+# Correctness-oriented rules only: pyflakes (undefined names, unused imports) and
+# pycodestyle errors. Style beyond formatting is left to `ruff format`.
+select = ["F", "E9", "E7"]
+ignore = ["E701", "E702", "E703", "E731", "E741", "F401", "F841"]
+
+[tool.ruff.lint.per-file-ignores]
+"services/workers/*" = ["E402"]
+"tests/**" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-p no:cacheprovider"

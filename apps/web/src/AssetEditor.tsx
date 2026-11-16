@@ -46,7 +46,14 @@ interface Part {
   logical_group_id?: string;
 }
 interface Catalog {
-  manifest?: { operation?: { part_group_id?: string; part_group_ids?: string[]; faces_after?: number; target_reached?: boolean } };
+  manifest?: {
+    operation?: {
+      part_group_id?: string;
+      part_group_ids?: string[];
+      faces_after?: number;
+      target_reached?: boolean;
+    };
+  };
   version: string;
   latest_version: string;
   model_url: string;
@@ -217,14 +224,30 @@ export default function AssetEditor({
   materialScopeRef.current = materialScopeKey;
   async function exampleMaterial(name: string) {
     const captured = materialScopeKey;
-    setBusy(true);setError('');
+    setBusy(true);
+    setError('');
     try {
-      const preset = await post<MaterialSettings & { provenance: string }>(`/api/material-presets/${name}/prepare`);
+      const preset = await post<MaterialSettings & { provenance: string }>(
+        `/api/material-presets/${name}/prepare`,
+      );
       if (materialScopeRef.current !== captured) return;
-      updateMaterial({ color: preset.color, roughness: preset.roughness, metalness: preset.metalness, opacity: preset.opacity, mode: preset.mode, textures: preset.textures, uvScale: preset.uvScale, uvRotation: preset.uvRotation });
+      updateMaterial({
+        color: preset.color,
+        roughness: preset.roughness,
+        metalness: preset.metalness,
+        opacity: preset.opacity,
+        mode: preset.mode,
+        textures: preset.textures,
+        uvScale: preset.uvScale,
+        uvRotation: preset.uvRotation,
+      });
       setMessage('已预览示例材质；可调整花纹方向和大小，保存后才写入模型。示例不代表原商品面料。');
-    } catch (e) { if (materialScopeRef.current === captured) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (materialScopeRef.current === captured) setBusy(false); }
+    } catch (e) {
+      if (materialScopeRef.current === captured)
+        setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (materialScopeRef.current === captured) setBusy(false);
+    }
   }
   function undoMaterial() {
     const value = draftUndo.at(-1);
@@ -453,7 +476,7 @@ export default function AssetEditor({
                 ? '新部件已保存并选中，现在可整块换材质；形状与隐藏表面仍需确认。'
                 : operation === 'optimize_mesh'
                   ? `保形减面后为 ${result.manifest?.operation?.faces_after?.toLocaleString()} 面${result.manifest?.operation?.target_reached ? '，已达到目标。' : '；部分网格因保护保留，尚未达到目标。'}`
-              : '修改已保存，原模型与历史版本保留。',
+                  : '修改已保存，原模型与历史版本保留。',
       );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -475,9 +498,11 @@ export default function AssetEditor({
     ['透明近似', 0, 0.08, 0.2],
   ] as const;
   const history = !!catalog && catalog.version !== catalog.latest_version;
-  const generatedWholeParts = !!catalog?.parts.length && catalog.parts.every(
-    (part) => part.group_kind === 'planned_native_part' && !!part.logical_group_id,
-  );
+  const generatedWholeParts =
+    !!catalog?.parts.length &&
+    catalog.parts.every(
+      (part) => part.group_kind === 'planned_native_part' && !!part.logical_group_id,
+    );
   async function uploadImage(file: File): Promise<string> {
     const data = new FormData();
     data.append('file', file);
@@ -557,7 +582,13 @@ export default function AssetEditor({
           ))}
         </div>
         {tab === 'material' && <p>先选要修改的部件，再换颜色或材质。</p>}
-        {tab === 'parts' && <p>{generatedWholeParts ? '已有部件候选，可直接选择、单独导出或移动；分组有误时再修正。' : '先生成完整分组候选，再逐个检查；也可涂抹拆出或移动局部。'}</p>}
+        {tab === 'parts' && (
+          <p>
+            {generatedWholeParts
+              ? '已有部件候选，可直接选择、单独导出或移动；分组有误时再修正。'
+              : '先生成完整分组候选，再逐个检查；也可涂抹拆出或移动局部。'}
+          </p>
+        )}
         {tab === 'more' && <p>历史版本、文件优化和原图对照设置。</p>}
         {draftDirty && tab !== 'material' && (
           <p className="draft-status">
@@ -571,9 +602,13 @@ export default function AssetEditor({
         {catalog && (
           <>
             {tab !== 'more' && generatedWholeParts && (
-              <p role="status">已按生成计划分为 {groups.length} 个部件候选。点击下方部件即可换材质；形状与隐藏结构仍需核对。</p>
+              <p role="status">
+                已按生成计划分为 {groups.length}{' '}
+                个部件候选。点击下方部件即可换材质；形状与隐藏结构仍需核对。
+              </p>
             )}
-            {((tab !== 'more' && !generatedWholeParts) || (tab === 'more' && generatedWholeParts)) && (
+            {((tab !== 'more' && !generatedWholeParts) ||
+              (tab === 'more' && generatedWholeParts)) && (
               <SemanticPartsPanel
                 jobId={jobId}
                 version={catalog.version}
@@ -1059,11 +1094,26 @@ export default function AssetEditor({
                     </button>
                   </details>
                   <div className="material-presets" aria-label="示例材质套装">
-                    {([['fabric', '示例布料'], ['leather', '示例皮革'], ['wood', '示例木纹']] as const).map(([name, label]) => (
-                      <button key={name} disabled={busy || history} onClick={() => void exampleMaterial(name)}>{label}</button>
+                    {(
+                      [
+                        ['fabric', '示例布料'],
+                        ['leather', '示例皮革'],
+                        ['wood', '示例木纹'],
+                      ] as const
+                    ).map(([name, label]) => (
+                      <button
+                        key={name}
+                        disabled={busy || history}
+                        onClick={() => void exampleMaterial(name)}
+                      >
+                        {label}
+                      </button>
                     ))}
                   </div>
-                  <p>示例材质可直接预览，也可上传自有面料或花纹替换。新重建部件已准备 UV；旧模型花纹拉伸时可先展开 UV。</p>
+                  <p>
+                    示例材质可直接预览，也可上传自有面料或花纹替换。新重建部件已准备
+                    UV；旧模型花纹拉伸时可先展开 UV。
+                  </p>
                   <div className="material-presets">
                     {presets.map(([name, metal, rough, alpha]) => (
                       <button
@@ -1357,29 +1407,50 @@ export default function AssetEditor({
                 </details>
                 <details>
                   <summary>减小模型文件（减面）</summary>
-                  <p>按目标面数处理，检查表面偏差、轮廓、闭合和 UV 拉伸。未通过的网格保留，结果仍需看图检查。</p>
-                  <label>目标面数<select aria-label="保形目标面数" value={targetFaces} disabled={busy} onChange={(e) => setTargetFaces(+e.target.value)}><option value={50000}>约 5 万面</option><option value={100000}>约 10 万面</option><option value={200000}>约 20 万面</option></select></label>
-                  <button disabled={busy || history || draftDirty} onClick={() => void edit('optimize_mesh', { target_faces: targetFaces })}>按目标面数保形减面</button>
-                  <details><summary>按比例减面（高级）</summary>
                   <p>
-                    逐部件减面，保留材质分界并检查包围盒与采样顶点距离。含 UV
-                    的部件暂时拦截，以保护纹理接缝。结果仍需视觉检查。
+                    按目标面数处理，检查表面偏差、轮廓、闭合和 UV
+                    拉伸。未通过的网格保留，结果仍需看图检查。
                   </p>
                   <label>
-                    目标保留比例 {Math.round(lodRatio * 100)}%
-                    <input
-                      aria-label="LOD保留比例"
-                      type="range"
-                      min=".1"
-                      max=".9"
-                      step=".1"
-                      value={lodRatio}
-                      onChange={(e) => setLodRatio(+e.target.value)}
-                    />
+                    目标面数
+                    <select
+                      aria-label="保形目标面数"
+                      value={targetFaces}
+                      disabled={busy}
+                      onChange={(e) => setTargetFaces(+e.target.value)}
+                    >
+                      <option value={50000}>约 5 万面</option>
+                      <option value={100000}>约 10 万面</option>
+                      <option value={200000}>约 20 万面</option>
+                    </select>
                   </label>
-                  <button disabled={busy || history} onClick={() => void edit('decimate')}>
-                    保存轻量化版本
+                  <button
+                    disabled={busy || history || draftDirty}
+                    onClick={() => void edit('optimize_mesh', { target_faces: targetFaces })}
+                  >
+                    按目标面数保形减面
                   </button>
+                  <details>
+                    <summary>按比例减面（高级）</summary>
+                    <p>
+                      逐部件减面，保留材质分界并检查包围盒与采样顶点距离。含 UV
+                      的部件暂时拦截，以保护纹理接缝。结果仍需视觉检查。
+                    </p>
+                    <label>
+                      目标保留比例 {Math.round(lodRatio * 100)}%
+                      <input
+                        aria-label="LOD保留比例"
+                        type="range"
+                        min=".1"
+                        max=".9"
+                        step=".1"
+                        value={lodRatio}
+                        onChange={(e) => setLodRatio(+e.target.value)}
+                      />
+                    </label>
+                    <button disabled={busy || history} onClick={() => void edit('decimate')}>
+                      保存轻量化版本
+                    </button>
                   </details>
                 </details>
                 <details>

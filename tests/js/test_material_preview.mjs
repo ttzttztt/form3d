@@ -104,7 +104,8 @@ const results = {
   passed: 7,
 };
 await fs.writeFile(
-  process.env.MATERIAL_PREVIEW_REPORT || '.data/checks/test_material_preview/material_preview_unit.json',
+  process.env.MATERIAL_PREVIEW_REPORT ||
+    '.data/checks/test_material_preview/material_preview_unit.json',
   JSON.stringify(results, null, 2),
 );
 console.log(JSON.stringify(results));

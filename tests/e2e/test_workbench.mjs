@@ -34,7 +34,10 @@ try {
   assert.equal(await page.locator('.examples-grid .example-card').count(), 4);
   await page.locator('.viewer-canvas canvas').waitFor();
   await page.locator('.viewer-overlay').waitFor({ state: 'hidden', timeout: 60000 });
-  assert.equal(await page.getByRole('button', { name: '开始生成', exact: true }).isDisabled(), true);
+  assert.equal(
+    await page.getByRole('button', { name: '开始生成', exact: true }).isDisabled(),
+    true,
+  );
   await page.screenshot({ path: path.join(output, 'workbench-desktop.png'), fullPage: true });
 
   await page

@@ -1,4 +1,5 @@
 """Regression checks for pale product details and user-supplied alpha."""
+
 import unittest
 import json
 import struct
@@ -34,37 +35,44 @@ class PreparationTests(unittest.TestCase):
 
     def test_vertex_color_is_linearized_without_changing_geometry(self):
         import trimesh
-        mesh = trimesh.Trimesh(vertices=[[0,0,0],[1,0,0],[0,1,0]], faces=[[0,1,2]],
-                               vertex_colors=[[128,128,128,255]]*3, process=False)
+
+        mesh = trimesh.Trimesh(
+            vertices=[[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+            faces=[[0, 1, 2]],
+            vertex_colors=[[128, 128, 128, 255]] * 3,
+            process=False,
+        )
         vertices = mesh.vertices.copy()
         prepare_vertex_appearance(mesh)
-        self.assertEqual(mesh.visual.vertex_colors[0].tolist(), [55,55,55,255])
+        self.assertEqual(mesh.visual.vertex_colors[0].tolist(), [55, 55, 55, 255])
         self.assertTrue(np.array_equal(mesh.vertices, vertices))
         self.assertEqual(mesh.visual.material.metallicFactor, 0)
-        content = mesh.export(file_type='glb')
-        length = struct.unpack_from('<I', content, 12)[0]
-        document = json.loads(content[20:20+length])
-        primitive = document['meshes'][0]['primitives'][0]
-        self.assertIn('COLOR_0', primitive['attributes'])
-        material = document['materials'][primitive['material']]['pbrMetallicRoughness']
-        self.assertEqual(material['metallicFactor'], 0)
-        self.assertEqual(material['roughnessFactor'], .8)
+        content = mesh.export(file_type="glb")
+        length = struct.unpack_from("<I", content, 12)[0]
+        document = json.loads(content[20 : 20 + length])
+        primitive = document["meshes"][0]["primitives"][0]
+        self.assertIn("COLOR_0", primitive["attributes"])
+        material = document["materials"][primitive["material"]]["pbrMetallicRoughness"]
+        self.assertEqual(material["metallicFactor"], 0)
+        self.assertEqual(material["roughnessFactor"], 0.8)
 
     def test_progress_write_retries_windows_sharing_violation(self):
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / 'progress.json'
-            target.write_text('{}', encoding='utf-8')
+            target = Path(directory) / "progress.json"
+            target.write_text("{}", encoding="utf-8")
             replace = Path.replace
             attempts = []
+
             def initially_locked(source, destination):
                 attempts.append(1)
                 if len(attempts) < 3:
-                    raise PermissionError('simulated Windows sharing violation')
+                    raise PermissionError("simulated Windows sharing violation")
                 return replace(source, destination)
-            with patch.object(Path, 'replace', initially_locked):
-                write_json(target, {'stage':'generated'})
+
+            with patch.object(Path, "replace", initially_locked):
+                write_json(target, {"stage": "generated"})
             self.assertEqual(len(attempts), 3)
-            self.assertEqual(json.loads(target.read_text())['stage'], 'generated')
+            self.assertEqual(json.loads(target.read_text())["stage"], "generated")
 
 
 if __name__ == "__main__":

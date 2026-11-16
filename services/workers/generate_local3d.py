@@ -3,6 +3,7 @@
 Uses CPU marching cubes (scikit-image) to avoid a platform-specific CUDA
 extension; the learned image-to-triplane model still runs on CUDA.
 """
+
 import argparse
 import hashlib
 import json
@@ -33,7 +34,7 @@ def write_json(path, value):
         except PermissionError:
             if attempt == 11:
                 raise
-            time.sleep(.025 * (attempt + 1))
+            time.sleep(0.025 * (attempt + 1))
 
 
 def main():
@@ -51,8 +52,12 @@ def main():
     def progress(stage, message):
         nonlocal counter
         counter += 1
-        item = {"sequence": counter, "stage": stage, "message": message,
-                "elapsed_seconds": round(time.monotonic() - start, 2)}
+        item = {
+            "sequence": counter,
+            "stage": stage,
+            "message": message,
+            "elapsed_seconds": round(time.monotonic() - start, 2),
+        }
         if output:
             try:
                 write_json(output / "local_progress.json", item)
@@ -72,11 +77,13 @@ def main():
 
     # Match torchmcubes' z/y/x output contract; upstream then converts to x/y/z.
     compatibility = types.ModuleType("torchmcubes")
+
     def cpu_marching_cubes(volume, level):
-        vertices, faces, _, _ = marching_cubes(volume.detach().float().cpu().numpy(),
-                                             level=level, allow_degenerate=False)
-        return (torch.from_numpy(vertices[:, [2, 1, 0]].copy()),
-                torch.from_numpy(faces.astype(np.int64).copy()))
+        vertices, faces, _, _ = marching_cubes(
+            volume.detach().float().cpu().numpy(), level=level, allow_degenerate=False
+        )
+        return (torch.from_numpy(vertices[:, [2, 1, 0]].copy()), torch.from_numpy(faces.astype(np.int64).copy()))
+
     compatibility.marching_cubes = cpu_marching_cubes
     sys.modules["torchmcubes"] = compatibility
     sys.path.insert(0, str(SOURCE))
@@ -88,8 +95,11 @@ def main():
         if repo_id != "facebook/dino-vitb16" or filename != "config.json":
             raise ValueError("Unexpected remote resource requested during offline inference")
         return str(MODEL / "dino_config.json")
+
     image_tokenizer.hf_hub_download = local_dino_config
-    required = [MODEL / name for name in ("model.ckpt", "config.yaml", "dino_config.json", "u2netp.onnx", "provenance.json")]
+    required = [
+        MODEL / name for name in ("model.ckpt", "config.yaml", "dino_config.json", "u2netp.onnx", "provenance.json")
+    ]
     if not all(path.is_file() for path in required):
         raise FileNotFoundError("Local model files missing; run services/workers/setup_local3d.py")
     if not torch.cuda.is_available():
@@ -99,10 +109,17 @@ def main():
     if args.check:
         import rembg
         import onnxruntime
-        ready = {"available": True, "python": str(Path(sys.executable).resolve()),
-                 "model": "TripoSR", "device": torch.cuda.get_device_name(0),
-                 "torch": torch.__version__, "cuda": torch.version.cuda,
-                 "marching_cubes": "scikit-image (CPU)", "offline": True}
+
+        ready = {
+            "available": True,
+            "python": str(Path(sys.executable).resolve()),
+            "model": "TripoSR",
+            "device": torch.cuda.get_device_name(0),
+            "torch": torch.__version__,
+            "cuda": torch.version.cuda,
+            "marching_cubes": "scikit-image (CPU)",
+            "offline": True,
+        }
         write_json(MODEL / "runtime.json", ready)
         print(json.dumps(ready, ensure_ascii=True), flush=True)
         return
@@ -116,6 +133,7 @@ def main():
     background_method = "existing_alpha_or_input"
     if not args.keep_background:
         from local3d_preprocess import remove_product_background
+
         image, background_method = remove_product_background(image, MODEL)
     alpha = np.asarray(image.getchannel("A"))
     points = np.argwhere(alpha > 32)
@@ -125,7 +143,7 @@ def main():
     bottom, right = points.max(axis=0) + 1
     image = image.crop((int(left), int(top), int(right), int(bottom)))
     image.save(output / "foreground.png")
-    side = max(32, int(max(image.size) / .85))
+    side = max(32, int(max(image.size) / 0.85))
     square = Image.new("RGBA", (side, side), (128, 128, 128, 0))
     square.paste(image, ((side - image.width) // 2, (side - image.height) // 2))
     background = Image.new("RGBA", square.size, (128, 128, 128, 255))
@@ -158,6 +176,7 @@ def main():
     if mesh.volume < 0:
         mesh.invert()
     from local3d_export import prepare_vertex_appearance
+
     mesh = prepare_vertex_appearance(mesh)
     mesh.metadata.update(generator="TripoSR", units="normalized_unverified")
     progress("export", "导出带颜色的自包含 GLB")
@@ -166,19 +185,25 @@ def main():
     temporary.replace(output / "model.glb")
     provenance = json.loads((MODEL / "provenance.json").read_text(encoding="utf-8"))
     summary = {
-        "model": "TripoSR", "model_id": "stabilityai/TripoSR", "device": torch.cuda.get_device_name(0),
+        "model": "TripoSR",
+        "model_id": "stabilityai/TripoSR",
+        "device": torch.cuda.get_device_name(0),
         "duration_seconds": round(time.monotonic() - start, 2),
-        "peak_vram_mb": round(torch.cuda.max_memory_allocated() / 1024 ** 2, 1),
-        "resolution": args.resolution, "precision": "float16 inference / float32 mesh extraction",
+        "peak_vram_mb": round(torch.cuda.max_memory_allocated() / 1024**2, 1),
+        "resolution": args.resolution,
+        "precision": "float16 inference / float32 mesh extraction",
         "background_method": background_method,
-        "texture_source": "TripoSR predicted vertex colors", "offline": True,
+        "texture_source": "TripoSR predicted vertex colors",
+        "offline": True,
         "coordinate_system": "glTF Y-up, reference front +Z",
         "color_encoding": "sRGB prediction converted to linear glTF vertex colors",
         "surface_material": "approximate nonmetal matte surface, not inferred PBR",
         "input_sha256": hashlib.sha256(Path(args.input).read_bytes()).hexdigest(),
         "model_input_sha256": hashlib.sha256((output / "model_input.png").read_bytes()).hexdigest(),
-        "vertices": len(mesh.vertices), "triangles": len(mesh.faces),
-        "dimensions_normalized": mesh.extents.tolist(), "provenance": provenance,
+        "vertices": len(mesh.vertices),
+        "triangles": len(mesh.faces),
+        "dimensions_normalized": mesh.extents.tolist(),
+        "provenance": provenance,
     }
     write_json(output / "local_summary.json", summary)
     progress("generated", "本地模型已导出，准备检查 GLB")

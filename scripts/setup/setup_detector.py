@@ -1,4 +1,5 @@
 """Download a public Grounding DINO checkpoint; never uploads product images."""
+
 import concurrent.futures
 import json
 import os
@@ -8,7 +9,15 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 DESTINATION = ROOT / ".models" / "grounding-dino-tiny"
-FILES = ["config.json", "preprocessor_config.json", "tokenizer_config.json", "tokenizer.json", "special_tokens_map.json", "vocab.txt", "model.safetensors"]
+FILES = [
+    "config.json",
+    "preprocessor_config.json",
+    "tokenizer_config.json",
+    "tokenizer.json",
+    "special_tokens_map.json",
+    "vocab.txt",
+    "model.safetensors",
+]
 
 
 def download_checkpoint(target):
@@ -19,6 +28,7 @@ def download_checkpoint(target):
         response.read()
     chunk_size = 4 * 1024 * 1024
     parts = (total + chunk_size - 1) // chunk_size
+
     def chunk(index):
         start, end = index * chunk_size, min((index + 1) * chunk_size, total) - 1
         destination = target.with_suffix(".part%04d" % index)
@@ -26,7 +36,10 @@ def download_checkpoint(target):
             return destination
         for attempt in range(3):
             try:
-                request = urllib.request.Request(base + "&part=%s" % index, headers={"Range": "bytes=%s-%s" % (start, end), "User-Agent": "Mozilla/5.0"})
+                request = urllib.request.Request(
+                    base + "&part=%s" % index,
+                    headers={"Range": "bytes=%s-%s" % (start, end), "User-Agent": "Mozilla/5.0"},
+                )
                 with urllib.request.urlopen(request, timeout=35) as response:
                     if response.headers.get("Content-Range") != "bytes %s-%s/%s" % (start, end, total):
                         raise ValueError("Unexpected download range")
@@ -36,14 +49,19 @@ def download_checkpoint(target):
                 destination.write_bytes(data)
                 return destination
             except Exception:
-                if attempt == 2: raise
+                if attempt == 2:
+                    raise
                 time.sleep(1)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         futures = [pool.submit(chunk, index) for index in range(parts)]
         for index, future in enumerate(concurrent.futures.as_completed(futures), 1):
             future.result()
             if index % 8 == 0 or index == parts:
-                print("Checkpoint: %s/%s parts (%.0f MB)" % (index, parts, min(index * chunk_size, total) / 1024 ** 2), flush=True)
+                print(
+                    "Checkpoint: %s/%s parts (%.0f MB)" % (index, parts, min(index * chunk_size, total) / 1024**2),
+                    flush=True,
+                )
     temporary = target.with_suffix(".download")
     with temporary.open("wb") as output:
         for index in range(parts):
@@ -53,7 +71,7 @@ def download_checkpoint(target):
     temporary.replace(target)
     for index in range(parts):
         target.with_suffix(".part%04d" % index).unlink()
-    print("Downloaded model.safetensors: %.0f MB" % (total / 1024 ** 2), flush=True)
+    print("Downloaded model.safetensors: %.0f MB" % (total / 1024**2), flush=True)
 
 
 def download(name):
@@ -83,7 +101,7 @@ def download(name):
                     output.write(chunk)
                     total += len(chunk)
                     if total - last >= 32 * 1024 * 1024:
-                        print("%s: %.0f MB" % (name, total / 1024 ** 2), flush=True)
+                        print("%s: %.0f MB" % (name, total / 1024**2), flush=True)
                         last = total
             if name.endswith(".json"):
                 json.loads(temporary.read_text(encoding="utf-8"))

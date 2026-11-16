@@ -3,6 +3,7 @@
 Downloads are resumable and SHA-256 checked. Images are never uploaded.
 This setup script does not install packages or change existing ML environments.
 """
+
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
@@ -61,14 +62,23 @@ def small_file(url, destination, expected_sha=None):
 def source_files():
     base = "https://api.github.com/repos/VAST-AI-Research/TripoSR/git/"
     listing = json.loads(retry_read(base + "trees/" + SOURCE_REVISION + "?recursive=1"))
-    entries = [item for item in listing["tree"] if item["type"] == "blob"
-               and (item["path"].startswith("tsr/") and item["path"].endswith(".py")
-                    or item["path"] in ("LICENSE", "README.md", "run.py", "requirements.txt", "examples/chair.png"))]
+    entries = [
+        item
+        for item in listing["tree"]
+        if item["type"] == "blob"
+        and (
+            item["path"].startswith("tsr/")
+            and item["path"].endswith(".py")
+            or item["path"] in ("LICENSE", "README.md", "run.py", "requirements.txt", "examples/chair.png")
+        )
+    ]
 
     def fetch(item):
         target = SOURCE / item["path"]
+
         def git_hash(content):
             return hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
+
         if target.is_file() and git_hash(target.read_bytes()) == item["sha"]:
             return
         blob = json.loads(retry_read(base + "blobs/" + item["sha"]))
@@ -80,10 +90,17 @@ def source_files():
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(fetch, entries))
-    (SOURCE / "source_revision.json").write_text(json.dumps({
-        "repository": "https://github.com/VAST-AI-Research/TripoSR",
-        "revision": SOURCE_REVISION, "license": "MIT",
-    }, indent=2), encoding="utf-8")
+    (SOURCE / "source_revision.json").write_text(
+        json.dumps(
+            {
+                "repository": "https://github.com/VAST-AI-Research/TripoSR",
+                "revision": SOURCE_REVISION,
+                "license": "MIT",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print("Pinned TripoSR source ready", flush=True)
 
 
@@ -104,8 +121,10 @@ def checkpoint():
             return
         for attempt in range(5):
             try:
-                request = urllib.request.Request(url + "&part=" + str(index),
-                    headers={"Range": "bytes=%d-%d" % (start, end), "User-Agent": "img3d-local-setup"})
+                request = urllib.request.Request(
+                    url + "&part=" + str(index),
+                    headers={"Range": "bytes=%d-%d" % (start, end), "User-Agent": "img3d-local-setup"},
+                )
                 with urllib.request.urlopen(request, timeout=40) as response:
                     if response.headers.get("Content-Range") != "bytes %d-%d/%d" % (start, end, MODEL_SIZE):
                         raise ValueError("Unexpected checkpoint range")
@@ -124,8 +143,11 @@ def checkpoint():
         for complete, future in enumerate(as_completed(futures), 1):
             future.result()
             if complete % 16 == 0 or complete == count:
-                print("TripoSR weights: %d/%d chunks (%.0f MiB)" %
-                      (complete, count, min(complete * chunk_size, MODEL_SIZE) / 1024 ** 2), flush=True)
+                print(
+                    "TripoSR weights: %d/%d chunks (%.0f MiB)"
+                    % (complete, count, min(complete * chunk_size, MODEL_SIZE) / 1024**2),
+                    flush=True,
+                )
     temporary = MODELS / "model.ckpt.download"
     with temporary.open("wb") as output:
         for index in range(count):
@@ -148,14 +170,27 @@ def support_files():
     dino = json.loads(retry_read(HF + "/api/models/facebook/dino-vitb16"))
     small_file(HF + "/facebook/dino-vitb16/raw/" + dino["sha"] + "/config.json", MODELS / "dino_config.json")
     background = json.loads(retry_read(HF + "/api/models/BritishWerewolf/U-2-Netp"))
-    small_file(HF + "/BritishWerewolf/U-2-Netp/resolve/" + background["sha"] + "/onnx/model.onnx?download=true",
-               MODELS / "u2netp.onnx", "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8")
-    (MODELS / "provenance.json").write_text(json.dumps({
-        "model": "stabilityai/TripoSR", "model_revision": MODEL_REVISION,
-        "model_sha256": MODEL_SHA256, "source_revision": SOURCE_REVISION,
-        "dino_config_revision": dino["sha"], "background_model": "BritishWerewolf/U-2-Netp",
-        "background_revision": background["sha"], "license": "MIT",
-    }, indent=2), encoding="utf-8")
+    small_file(
+        HF + "/BritishWerewolf/U-2-Netp/resolve/" + background["sha"] + "/onnx/model.onnx?download=true",
+        MODELS / "u2netp.onnx",
+        "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8",
+    )
+    (MODELS / "provenance.json").write_text(
+        json.dumps(
+            {
+                "model": "stabilityai/TripoSR",
+                "model_revision": MODEL_REVISION,
+                "model_sha256": MODEL_SHA256,
+                "source_revision": SOURCE_REVISION,
+                "dino_config_revision": dino["sha"],
+                "background_model": "BritishWerewolf/U-2-Netp",
+                "background_revision": background["sha"],
+                "license": "MIT",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

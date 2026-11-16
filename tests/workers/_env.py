@@ -1,4 +1,5 @@
 """Optional native dependencies; tests that need them skip with a reason instead of failing."""
+
 import contextlib
 import io
 

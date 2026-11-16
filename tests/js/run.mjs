@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-const files = fs.readdirSync(here).filter((f) => f.startsWith('test_') && f.endsWith('.mjs')).sort();
+const files = fs
+  .readdirSync(here)
+  .filter((f) => f.startsWith('test_') && f.endsWith('.mjs'))
+  .sort();
 let failed = 0;
 for (const file of files) {
   fs.mkdirSync(path.join('.data/checks', path.basename(file, '.mjs')), { recursive: true });

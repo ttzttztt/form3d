@@ -3,6 +3,7 @@
 Live account validation is required before production use. No calls are made
 without a configured key AND per-job third-party processing consent.
 """
+
 import base64
 import ipaddress
 import os
@@ -27,7 +28,13 @@ class Cancelled(Exception):
 
 def checked_public_url(url):
     parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None, 443):
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.port not in (None, 443)
+    ):
         raise ValueError("供应商返回了不允许的下载地址")
     addresses = socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)
     if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
@@ -43,6 +50,7 @@ def download_model(url, destination):
             with client.stream("GET", url) as response:
                 if response.is_redirect:
                     from urllib.parse import urljoin
+
                     url = urljoin(url, response.headers["location"])
                     continue
                 response.raise_for_status()
@@ -121,6 +129,9 @@ def generate_meshy(store, job_id, prepared, destination):
             if state in ("FAILED", "CANCELED", "CANCELLED"):
                 raise ValueError("云端任务未成功，请到供应商后台查看原因与费用状态")
             progress = result.get("progress")
-            store.update(job_id, lambda item: item.update(provider_progress=progress if isinstance(progress, (int, float)) else None))
+            store.update(
+                job_id,
+                lambda item: item.update(provider_progress=progress if isinstance(progress, (int, float)) else None),
+            )
             time.sleep(5)
         raise RemotePending("云端任务仍未结束，已暂停本地等待；可恢复查询，不会创建新任务")

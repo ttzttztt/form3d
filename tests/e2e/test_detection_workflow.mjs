@@ -12,8 +12,7 @@ const references = JSON.parse(
 const bookcase = references.find((item) => item.product === 'bookcase');
 const alien = references.find((item) => item.product === 'alien');
 const browser = await chromium.launch({
-  executablePath:
-    process.env.CHROME_PATH,
+  executablePath: process.env.CHROME_PATH,
   headless: true,
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
 });

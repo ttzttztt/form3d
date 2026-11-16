@@ -1,4 +1,5 @@
 """Worker modules are standalone scripts that import their siblings by bare name."""
+
 import sys
 from pathlib import Path
 

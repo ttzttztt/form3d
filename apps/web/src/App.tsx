@@ -81,7 +81,7 @@ export default function App() {
     reviewStatus: string;
   }>();
   const [pickedPart, setPickedPart] = useState('');
-  const [completionBounds,setCompletionBounds]=useState<number[][]>();
+  const [completionBounds, setCompletionBounds] = useState<number[][]>();
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]),
     [materialDraft, setMaterialDraft] = useState<MaterialDraft>();
   const [draftStatus, setDraftStatus] = useState<PreviewStatus>('idle');

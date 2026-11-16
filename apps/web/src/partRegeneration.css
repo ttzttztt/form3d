@@ -59,19 +59,76 @@
   border-radius: 6px;
   margin-top: 8px;
 }
-.part-assessment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
-.part-assessment { padding: 8px; border: 1px solid #cdd8df; border-radius: 7px; background: white; overflow-wrap: anywhere; }
-.part-assessment strong, .part-assessment span { display: block; font-size: 12px; }
-.part-assessment p { font-size: 12px; margin: 6px 0 0; line-height: 1.6; }
-.part-assessment.passed { border-color: #8cbcab; }
-.part-assessment.warning, .part-assessment.unverified { border-color: #d9b77b; }
-.part-assessment.blocked { border-color: #cd8585; }
-.part-candidate-list article { padding: 9px 0; border-top: 1px solid #dce3ec; }
-.part-extra-view { display: grid; grid-template-columns: 45px minmax(0, 1fr); gap: 6px; margin: 10px 0; align-items: center; }
-.part-extra-view img { width: 45px; height: 45px; object-fit: contain; }
-.part-extra-view span { overflow-wrap: anywhere; font-size: 12px; }
-.part-extra-view select, .part-extra-view button { min-width: 0; }
-.part-manual-options { margin: 12px 0; }
-.part-view-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.part-view-pair figure { margin: 0; min-width: 0; }
-.part-view-pair figcaption { text-align: center; font-size: 12px; }
+.part-assessment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0;
+}
+.part-assessment {
+  padding: 8px;
+  border: 1px solid #cdd8df;
+  border-radius: 7px;
+  background: white;
+  overflow-wrap: anywhere;
+}
+.part-assessment strong,
+.part-assessment span {
+  display: block;
+  font-size: 12px;
+}
+.part-assessment p {
+  font-size: 12px;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.part-assessment.passed {
+  border-color: #8cbcab;
+}
+.part-assessment.warning,
+.part-assessment.unverified {
+  border-color: #d9b77b;
+}
+.part-assessment.blocked {
+  border-color: #cd8585;
+}
+.part-candidate-list article {
+  padding: 9px 0;
+  border-top: 1px solid #dce3ec;
+}
+.part-extra-view {
+  display: grid;
+  grid-template-columns: 45px minmax(0, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+  align-items: center;
+}
+.part-extra-view img {
+  width: 45px;
+  height: 45px;
+  object-fit: contain;
+}
+.part-extra-view span {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.part-extra-view select,
+.part-extra-view button {
+  min-width: 0;
+}
+.part-manual-options {
+  margin: 12px 0;
+}
+.part-view-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.part-view-pair figure {
+  margin: 0;
+  min-width: 0;
+}
+.part-view-pair figcaption {
+  text-align: center;
+  font-size: 12px;
+}
