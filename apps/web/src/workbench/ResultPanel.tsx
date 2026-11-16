@@ -217,6 +217,17 @@ export default function ResultPanel({ wb }: { wb: Workbench }) {
               </div>
               {job && (
                 <div className="job-progress">
+                  {job.parts_plan && (
+                    <div className="input-preparation parts-plan">
+                      <strong>原图部件规划 · {job.parts_plan.count} 个部件</strong>
+                      <p>{job.parts_plan.parts.map((part) => part.name).join('、')}</p>
+                      {job.parts_overlay_url && (
+                        <a href={job.parts_overlay_url} target="_blank" rel="noreferrer">
+                          查看部件识别叠加图
+                        </a>
+                      )}
+                    </div>
+                  )}
                   {job.output_quality && (
                     <div className="input-preparation">
                       <strong>

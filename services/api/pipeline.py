@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 from .geometry import build_template, inspect_glb, validate_glb
 from .models import JobRequest
 from .local3d import generate_local
+from .parts_first import run_parts_first
 from .provider import Cancelled, RemotePending, SubmissionUnknown, generate_meshy
 from .preflight import InputNeedsAttention
 from .output_quality import OutputNeedsAttention
@@ -80,6 +81,16 @@ def run_job(store, job_id):
                 prepared_url="/api/jobs/%s/files/prepared.png" % job_id,
                 preparation=preparation,
             )
+            return
+        if request.route == "parts_first":
+            store.event(
+                job_id,
+                "generate",
+                "开始部件优先生成：识别部件 → 按部件生成 → 审计 → 装配",
+                prepared_url="/api/jobs/%s/files/prepared.png" % job_id,
+                preparation=preparation,
+            )
+            run_parts_first(store, job_id, directory, request, image, check_cancelled)
             return
         store.event(
             job_id,

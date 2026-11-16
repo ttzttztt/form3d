@@ -16,12 +16,15 @@ import {
   Plus,
   Sparkles,
   WandSparkles,
+  Boxes,
 } from 'lucide-react';
 import { templateNames, colors } from './constants';
 import type { Workbench } from './useWorkbench';
 
 export default function InputPanel({ wb }: { wb: Workbench }) {
   const {
+    partsReady,
+    partsCategoryReady,
     config,
     job,
     image,
@@ -310,6 +313,26 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
               </button>
             </div>
             <div className="route-options">
+              <button
+                disabled={!partsReady}
+                title={
+                  partsReady
+                    ? ''
+                    : '缺少：' + (config?.providers.parts_first?.missing ?? []).join('、')
+                }
+                className={'route-option parts-route ' + (route === 'parts_first' ? 'chosen' : '')}
+                onClick={() => {
+                  setRoute('parts_first');
+                  creationKey.current = undefined;
+                }}
+              >
+                <Boxes size={18} />
+                <span>
+                  <strong>部件优先生成</strong>
+                  <small>{partsReady ? 'PartCrafter · 可编辑部件' : '部件环境待就绪'}</small>
+                </span>
+                <i>{route === 'parts_first' && <Check size={10} />}</i>
+              </button>
               <button
                 disabled={!config?.providers.local.available}
                 className={'route-option local-route ' + (route === 'local' ? 'chosen' : '')}
@@ -600,6 +623,40 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
                   </>
                 )}
               </div>
+            ) : route === 'parts_first' ? (
+              <div className="assistant-note parts-first-note">
+                <strong>先在原图中识别部件，再按部件生成并装配。</strong>
+                <p>
+                  流程：识别坐垫、靠枕、桌面、桌腿、柜门等部件 → PartCrafter 按部件联合生成 →
+                  检查闭合与原图对应 → 输出带部件身份的
+                  GLB。任一阶段证据不足会停下说明原因，不会发布不完整的装配。
+                </p>
+                <div className="template-row">
+                  <label className="field-label" htmlFor="parts-category">
+                    家具类别
+                  </label>
+                  <select
+                    id="parts-category"
+                    value={partsCategoryReady ? objectCategory : ''}
+                    onChange={(event) => {
+                      setObjectCategory(event.target.value);
+                      creationKey.current = undefined;
+                    }}
+                  >
+                    <option value="">请选择</option>
+                    <option value="sofa">沙发 / 扶手椅</option>
+                    <option value="chair">椅子</option>
+                    <option value="table">桌子</option>
+                    <option value="cabinet">柜子 / 书柜</option>
+                  </select>
+                </div>
+                <span>
+                  {partsReady
+                    ? '仅几何、无纹理；最多 16 个部件；尺寸与隐藏结构未验证'
+                    : '环境未就绪，缺少：' +
+                      (config?.providers.parts_first?.missing ?? []).join('、')}
+                </span>
+              </div>
             ) : route === 'assistant' ? (
               <div className="assistant-note">
                 <strong>先提交图片，再在当前对话中让我建模。</strong>
@@ -647,6 +704,7 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
                 remoteNeedsAttention ||
                 assistantWaiting ||
                 (route === 'local' && !localReady) ||
+                (route === 'parts_first' && (!partsReady || !partsCategoryReady)) ||
                 (route === 'meshy' && !consent)
               }
               onClick={() => void generate()}
@@ -668,13 +726,15 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
               {!busy && <ArrowRight size={16} />}
             </button>
             <span>
-              {route === 'assistant'
-                ? '无需密钥 · 在当前对话中继续处理'
-                : route === 'local'
-                  ? '本机自动处理 · 无需密钥'
-                  : route === 'template'
-                    ? '本地处理，无模型 API 费用'
-                    : '第三方处理，按供应商规则计费'}
+              {route === 'parts_first'
+                ? '本机按部件生成 · 无需密钥'
+                : route === 'assistant'
+                  ? '无需密钥 · 在当前对话中继续处理'
+                  : route === 'local'
+                    ? '本机自动处理 · 无需密钥'
+                    : route === 'template'
+                      ? '本地处理，无模型 API 费用'
+                      : '第三方处理，按供应商规则计费'}
             </span>
           </div>
         </section>

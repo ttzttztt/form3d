@@ -9,10 +9,17 @@ from .glb_document import read_glb, parts_catalog
 from .part_regeneration import write_json
 
 
-def attach_assembly_candidate(store, job_id, source_folder, preview=None):
+def attach_assembly_candidate(
+    store, job_id, source_folder, preview=None, route="assistant", pending_status="awaiting_assistant"
+):
+    """Publish a checked assembly into a job that is still waiting for it.
+
+    route/pending_status: the offline importer uses an assistant job awaiting import;
+    the one-click parts_first job attaches while it is still running.
+    """
     job = store.job(job_id)
     source = Path(source_folder)
-    if not job or job["request"]["route"] != "assistant" or job["status"] != "awaiting_assistant":
+    if not job or job["request"]["route"] != route or job["status"] != pending_status:
         raise ValueError("Requires a fresh pending import task")
     directory = store.root / "jobs" / job_id
     if (directory / "model.glb").exists():
@@ -66,7 +73,7 @@ def attach_assembly_candidate(store, job_id, source_folder, preview=None):
     try:
         if file_hash(staged) != model_sha:
             raise ValueError("Assembly model changed during import")
-        if store.job(job_id)["status"] != "awaiting_assistant":
+        if store.job(job_id)["status"] != pending_status:
             raise ValueError("The import task state changed")
         # Creating a link is atomic and refuses an existing destination, unlike
         # replace(). This also protects against two separate importer processes.
@@ -84,7 +91,7 @@ def attach_assembly_candidate(store, job_id, source_folder, preview=None):
         "schema_version": "parts-first-candidate/1",
         "job_id": job_id,
         "asset_version": job_id,
-        "route": "assistant",
+        "route": route,
         "units": "normalized",
         "scale_status": "normalized_unverified",
         "ar_true_scale_ready": False,
@@ -117,7 +124,7 @@ def attach_assembly_candidate(store, job_id, source_folder, preview=None):
     metadata = {
         "job_id": job_id,
         "name": job["name"],
-        "route": "assistant",
+        "route": route,
         "units": "normalized",
         "scale_status": "normalized_unverified",
         "geometry_source": report["evidence"]["geometry_source"],
@@ -127,7 +134,7 @@ def attach_assembly_candidate(store, job_id, source_folder, preview=None):
     }
     write_json(directory / "quality_report.json", report)
     write_json(directory / "metadata.json", metadata)
-    if store.job(job_id)["status"] != "awaiting_assistant":
+    if store.job(job_id)["status"] != pending_status:
         raise ValueError("The import task state changed; candidate was not published")
     return store.event(
         job_id,

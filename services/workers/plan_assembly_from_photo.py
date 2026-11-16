@@ -109,7 +109,7 @@ def run(args):
         proposals.extend({**r, "kind": kind} for r in detect(prompt))
         print("PART_PLANNING_DETECTED", kind, len(proposals), flush=True)
     clutter = detect("laptop. book. person. cat. potted plant.", 0.30)
-    del model, processor
+    model = processor = None  # release GPU memory; detect() is not called after this
     gc.collect()
     torch.cuda.empty_cache()
     predictor = SAM2ImagePredictor(

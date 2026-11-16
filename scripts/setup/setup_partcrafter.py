@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MODEL = ROOT / ".models/partcrafter"
 RESEARCH = ROOT / "experiments/parts_first_20261114/model_research"
 REVISION = "69a0ffc1dad5e48e7e5ed91c0609f2b1276eb31f"
-ENDPOINT = "https://hf-mirror.com"
+ENDPOINT = __import__("os").getenv("HF_ENDPOINT", "https://hf-mirror.com")
 CHUNK = 4 * 1024 * 1024
 
 

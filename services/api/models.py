@@ -45,7 +45,7 @@ class JobRequest(StrictModel):
     name: str = Field(default="未命名商品", min_length=1, max_length=100)
     target: Target = Field(default_factory=Target)
     strokes: List[Stroke] = Field(default_factory=list, max_length=200)
-    route: Literal["local", "assistant", "template", "meshy"] = "local"
+    route: Literal["local", "assistant", "template", "meshy", "parts_first"] = "local"
     local_remove_background: bool = True
     local_engine: Literal["triposr", "hunyuan-mini"] = "triposr"
     local_segmentation: Literal["auto", "sam2", "basic"] = "auto"
@@ -73,6 +73,8 @@ class JobRequest(StrictModel):
             raise ValueError("参考图片不可重复或包含主图")
         if self.route == "meshy" and not self.allow_external:
             raise ValueError("云端生成需要明确允许图片传给第三方服务")
+        if self.route == "parts_first" and self.object_category not in ("sofa", "chair", "table", "cabinet"):
+            raise ValueError("部件优先生成需要选择家具类别：沙发、椅子、桌子或柜子")
         if self.route == "template" and self.template == "shelf":
             if self.dimensions.height / self.levels < 0.065:
                 raise ValueError("层间距过小，请增大高度或减少层数")

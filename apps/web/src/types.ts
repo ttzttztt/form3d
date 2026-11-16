@@ -78,7 +78,7 @@ export interface Job {
   request: {
     image_id: string;
     reference_image_ids?: string[];
-    route: 'local' | 'assistant' | 'template' | 'meshy';
+    route: Route;
     local_remove_background?: boolean;
     local_engine?: 'triposr' | 'hunyuan-mini';
     local_segmentation?: 'auto' | 'sam2' | 'basic';
@@ -96,7 +96,19 @@ export interface Job {
   metrics?: { parts: number; triangles: number; bytes: number; dimensions_m?: number[] };
   report?: { warnings: string[]; scale_status: string; checks: Record<string, string> };
   events: { at: string; stage: string; message: string }[];
+  parts_plan?: { count: number; parts: { id: string; name: string; kind: string }[] };
+  parts_overlay_url?: string;
 }
+export type Route = 'local' | 'assistant' | 'template' | 'meshy' | 'parts_first';
+
+export interface PartsFirstStatus {
+  available: boolean;
+  missing: string[];
+  categories: string[];
+  generator: string;
+  max_parts: number;
+}
+
 export interface Configuration {
   providers: {
     local: {
@@ -113,6 +125,7 @@ export interface Configuration {
     assistant: { available: boolean };
     template: { available: boolean };
     meshy: { available: boolean };
+    parts_first?: PartsFirstStatus;
   };
   detection: { available: boolean; model: string; categories: string[] };
   target_segmentation?: { available: boolean; model: string; score_is_accuracy: boolean };

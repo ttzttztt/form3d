@@ -184,15 +184,15 @@ class RegenerationGeometryTests(unittest.TestCase):
         source.apply_scale([0.5, 0.4, 0.12])
         source.update_faces(abs(source.triangles_center[:, 0]) < 0.47)
         source.remove_unreferenced_vertices()
-        patch, _ = observed_pose_surface(source, "pillow")
-        evidence = paired_thickness(source, patch)
+        surface_patch, _ = observed_pose_surface(source, "pillow")
+        evidence = paired_thickness(source, surface_patch)
         self.assertIsNotNone(evidence)
         self.assertGreater(evidence["core_thickness_source_units"], 0.12)
         one = source.copy()
         one.update_faces(one.triangles_center[:, 2] > 0)
         one.remove_unreferenced_vertices()
-        patch, _ = observed_pose_surface(one, "pillow")
-        self.assertIsNone(paired_thickness(one, patch))
+        surface_patch, _ = observed_pose_surface(one, "pillow")
+        self.assertIsNone(paired_thickness(one, surface_patch))
 
     def test_paper_shell_rebuild_has_volume_closed_rim_and_no_intersections(self):
         from soft_part_repair import fill_paper_pillow
@@ -204,8 +204,8 @@ class RegenerationGeometryTests(unittest.TestCase):
         source.apply_scale([0.5, 0.4, 0.12])
         source.update_faces(abs(source.triangles_center[:, 0]) < 0.47)
         source.remove_unreferenced_vertices()
-        patch, _ = observed_pose_surface(source, "pillow")
-        measurement = paired_thickness(source, patch)
+        surface_patch, _ = observed_pose_surface(source, "pillow")
+        measurement = paired_thickness(source, surface_patch)
         paper = trimesh.creation.box(extents=[0.9, 0.7, 0.004])
         for _ in range(3):
             paper = paper.subdivide()

@@ -148,7 +148,6 @@ def unwrap_uv(doc, binary, request):
 
 
 def reconstructed_scope(doc, part_ids):
-    from services.api.glb_document import parts_catalog
 
     parts = parts_catalog(doc)
     chosen = set(part_ids)

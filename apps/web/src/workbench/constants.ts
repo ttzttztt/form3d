@@ -10,5 +10,6 @@ export const routeNames = {
   assistant: '对话看图建模',
   template: '手动结构工具',
   meshy: '云端图生 3D',
+  parts_first: '部件优先生成',
 };
 export type Panel = 'history' | 'assets' | 'help' | 'settings' | 'report' | null;

@@ -9,6 +9,7 @@ import type {
   Stroke,
   Target,
   UploadedImage,
+  Route,
 } from '../types';
 import { useEffect, useRef, useState } from 'react';
 import { wholeImage, colors, Panel } from './constants';
@@ -25,7 +26,7 @@ export function useWorkbench() {
   const [target, setTarget] = useState<Target>(wholeImage);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [name, setName] = useState('');
-  const [route, setRoute] = useState<'local' | 'assistant' | 'template' | 'meshy'>('local');
+  const [route, setRoute] = useState<Route>('local');
   const [removeBackground, setRemoveBackground] = useState(true);
   const [localEngine, setLocalEngine] = useState<'triposr' | 'hunyuan-mini'>('triposr');
   const [localSegmentation, setLocalSegmentation] = useState<'auto' | 'sam2' | 'basic'>('auto');
@@ -86,6 +87,8 @@ export function useWorkbench() {
   const creationKey = useRef<string>();
   const busy = submitting || uploading || job?.status === 'running' || job?.status === 'queued';
   const active = job && ['queued', 'running'].includes(job.status);
+  const partsReady = !!config?.providers.parts_first?.available;
+  const partsCategoryReady = ['sofa', 'chair', 'table', 'cabinet'].includes(objectCategory);
   const remoteNeedsAttention = job?.status === 'awaiting_input' && route === 'meshy';
   const assistantWaiting = job?.status === 'awaiting_assistant' && route === 'assistant';
   const localReady =
@@ -333,6 +336,10 @@ export function useWorkbench() {
     )
       return notify('长、深、高均须在 10～500 cm 之间');
     if (route === 'meshy' && !consent) return notify('请先确认第三方图片处理与计费说明');
+    if (route === 'parts_first' && !partsReady)
+      return notify('部件优先生成环境未就绪，请查看服务状态');
+    if (route === 'parts_first' && !partsCategoryReady)
+      return notify('部件优先生成需要先选择家具类别');
     if (route === 'local' && !localReady)
       return notify('所选本地模型尚未完成运行验证，请查看服务状态');
     setSubmitting(true);
@@ -424,6 +431,8 @@ export function useWorkbench() {
   }
 
   return {
+    partsReady,
+    partsCategoryReady,
     config,
     setConfig,
     samples,

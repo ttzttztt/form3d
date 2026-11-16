@@ -48,6 +48,7 @@ from .asset_editor import (
 )
 from .detection import analyze_image, detector_status, DETECTOR_REVISION
 from .local3d import local3d_status
+from .parts_first import parts_first_status
 from .segmentation import segmentation_status
 from .preflight import preflight_status
 from .pipeline import run_job, write_json
@@ -146,6 +147,7 @@ def create_app(data_dir=None):
                 "assistant": {"available": True},
                 "template": {"available": True},
                 "meshy": {"available": bool(os.getenv("MESHY_API_KEY"))},
+                "parts_first": parts_first_status(),
             },
             "max_upload_mb": 12,
             "templates": ["shelf", "table", "cabinet"],
@@ -289,6 +291,8 @@ def create_app(data_dir=None):
         )
         if body.route == "local" and not selected_local.get("available"):
             raise HTTPException(409, "本地图生 3D 尚未就绪，请先安装本地模型并完成运行环境检查")
+        if body.route == "parts_first" and not parts_first_status()["available"]:
+            raise HTTPException(409, "部件优先生成环境未就绪，缺少：" + "、".join(parts_first_status()["missing"]))
         if (
             body.route == "local"
             and body.local_remove_background
@@ -406,6 +410,12 @@ def create_app(data_dir=None):
             "foreground_before_cleanup.png",
             "geometry_quality.json",
             "attempts.json",
+            "parts_overlay.png",
+            "parts_plan.json",
+            "parts_fit.png",
+            "parts_audit.json",
+            "assembly_plan.json",
+            "assembly_evidence.json",
         }:
             raise HTTPException(404, "文件不存在")
         if filename in {"model.glb", "quality_report.json", "metadata.json"} and not item.get("model_url"):
