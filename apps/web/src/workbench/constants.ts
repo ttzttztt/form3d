@@ -13,3 +13,21 @@ export const routeNames = {
   parts_first: '部件优先生成',
 };
 export type Panel = 'history' | 'assets' | 'help' | 'settings' | 'report' | null;
+
+export const partKindNames: Record<string, string> = {
+  seat_cushion: '坐垫',
+  back_cushion: '靠枕',
+  bolster: '圆柱抱枕',
+  backrest: '靠背',
+  armrest: '扶手',
+  frame: '座架 / 框架',
+  body: '整体主体',
+  leg: '支腿',
+  tabletop: '桌面',
+  door: '柜门',
+  drawer: '抽屉',
+  shelf: '层板',
+  panel: '侧板 / 面板',
+  other: '其他',
+  unknown: '未确定',
+};

@@ -96,7 +96,14 @@ export interface Job {
   metrics?: { parts: number; triangles: number; bytes: number; dimensions_m?: number[] };
   report?: { warnings: string[]; scale_status: string; checks: Record<string, string> };
   events: { at: string; stage: string; message: string }[];
-  parts_plan?: { count: number; parts: { id: string; name: string; kind: string }[] };
+  parts_plan?: {
+    count: number;
+    parts: { id: string; name: string; kind: string; index: number | null }[];
+    category?: string;
+    kind_options: string[];
+    problem?: string | null;
+    confirmed?: boolean;
+  };
   parts_overlay_url?: string;
 }
 export type Route = 'local' | 'assistant' | 'template' | 'meshy' | 'parts_first';
@@ -164,5 +171,6 @@ export const statusLabels: Record<string, string> = {
   cancelled: '已取消',
   awaiting_input: '需要处理',
   awaiting_assistant: '待看图建模',
+  awaiting_plan_review: '待确认部件',
   rejected: '需修改',
 };

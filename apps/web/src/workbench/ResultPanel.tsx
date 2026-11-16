@@ -1,5 +1,10 @@
-import AssetEditor from '../AssetEditor';
-import Viewer from '../Viewer';
+import { lazy, Suspense } from 'react';
+import PartsPlanReview from './PartsPlanReview';
+
+// three.js and the editor are the bulk of the bundle; load them after the page shell.
+const Viewer = lazy(() => import('../Viewer'));
+const AssetEditor = lazy(() => import('../AssetEditor'));
+const loading3d = <div className="lazy-fallback">正在加载 3D 查看器…</div>;
 import { api, statusLabels } from '../types';
 import {
   ArrowDownToLine,
@@ -128,6 +133,7 @@ export default function ResultPanel({ wb }: { wb: Workbench }) {
               </button>
               <span>{job ? '当前候选 · ' + job.id.slice(0, 6) : '可交互预览'}</span>
             </div>
+            {job?.status === 'awaiting_plan_review' && <PartsPlanReview wb={wb} />}
             <div className={comparison ? 'comparison-mode' : ''}>
               {comparison && (
                 <div className="comparison-image">
@@ -142,23 +148,25 @@ export default function ResultPanel({ wb }: { wb: Workbench }) {
                   </span>
                 </div>
               )}
-              <Viewer
-                url={previewUrl}
-                label={job?.name || sample?.name || '商品模型预览'}
-                onLoaded={() => setModelLoaded(true)}
-                onPartPick={setPickedPart}
-                selectedPart={pickedPart}
-                selectedPartIds={selectedPartIds}
-                materialDraft={materialDraft}
-                completionBounds={completionBounds}
-                onDraftStatus={setDraftStatus}
-                editingDisabled={editorBusy || assistanceBusy}
-                jobId={job?.id}
-                onAssistanceBusy={setAssistanceBusy}
-                onFacesChange={job?.model_url ? setFaceSelection : undefined}
-                referenceUrl={referenceOverride || job?.model_input_url || job?.prepared_url}
-                showReferenceTools={comparison}
-              />
+              <Suspense fallback={loading3d}>
+                <Viewer
+                  url={previewUrl}
+                  label={job?.name || sample?.name || '商品模型预览'}
+                  onLoaded={() => setModelLoaded(true)}
+                  onPartPick={setPickedPart}
+                  selectedPart={pickedPart}
+                  selectedPartIds={selectedPartIds}
+                  materialDraft={materialDraft}
+                  completionBounds={completionBounds}
+                  onDraftStatus={setDraftStatus}
+                  editingDisabled={editorBusy || assistanceBusy}
+                  jobId={job?.id}
+                  onAssistanceBusy={setAssistanceBusy}
+                  onFacesChange={job?.model_url ? setFaceSelection : undefined}
+                  referenceUrl={referenceOverride || job?.model_input_url || job?.prepared_url}
+                  showReferenceTools={comparison}
+                />
+              </Suspense>
             </div>
             <details className="model-information" open={modelEditing ? undefined : true}>
               <summary>模型信息与验收记录</summary>
@@ -384,26 +392,28 @@ export default function ResultPanel({ wb }: { wb: Workbench }) {
             </details>
           </div>
           {job?.model_url && (
-            <AssetEditor
-              key={job.id}
-              jobId={job.id}
-              pickedPart={pickedPart}
-              onSelect={setPickedPart}
-              onScope={setSelectedPartIds}
-              onCompletionBounds={setCompletionBounds}
-              onMaterialDraft={setMaterialDraft}
-              previewStatus={draftStatus}
-              onBusyChange={setEditorBusy}
-              externalBusy={assistanceBusy}
-              faces={faceSelection}
-              onReference={(url) => {
-                setReferenceOverride(url);
-                if (url) setComparison(true);
-              }}
-              onPreview={(url, metrics, reviewStatus) =>
-                setEditedPreview({ jobId: job.id, url, metrics, reviewStatus })
-              }
-            />
+            <Suspense fallback={loading3d}>
+              <AssetEditor
+                key={job.id}
+                jobId={job.id}
+                pickedPart={pickedPart}
+                onSelect={setPickedPart}
+                onScope={setSelectedPartIds}
+                onCompletionBounds={setCompletionBounds}
+                onMaterialDraft={setMaterialDraft}
+                previewStatus={draftStatus}
+                onBusyChange={setEditorBusy}
+                externalBusy={assistanceBusy}
+                faces={faceSelection}
+                onReference={(url) => {
+                  setReferenceOverride(url);
+                  if (url) setComparison(true);
+                }}
+                onPreview={(url, metrics, reviewStatus) =>
+                  setEditedPreview({ jobId: job.id, url, metrics, reviewStatus })
+                }
+              />
+            </Suspense>
           )}
         </div>
       </section>

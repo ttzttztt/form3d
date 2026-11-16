@@ -11,5 +11,10 @@ export default defineConfig({
     strictPort: true,
     proxy: { '/api': 'http://127.0.0.1:8000' },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    // The lazily loaded Viewer chunk is mostly three.js (~680 kB); the page shell stays ~220 kB.
+    chunkSizeWarningLimit: 800,
+  },
 });

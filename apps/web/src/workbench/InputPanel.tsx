@@ -23,6 +23,8 @@ import type { Workbench } from './useWorkbench';
 
 export default function InputPanel({ wb }: { wb: Workbench }) {
   const {
+    partsPlanReview,
+    setPartsPlanReview,
     partsReady,
     partsCategoryReady,
     config,
@@ -650,6 +652,17 @@ export default function InputPanel({ wb }: { wb: Workbench }) {
                     <option value="cabinet">柜子 / 书柜</option>
                   </select>
                 </div>
+                <label className="checkbox-label parts-review-toggle">
+                  <input
+                    type="checkbox"
+                    checked={partsPlanReview}
+                    onChange={(event) => {
+                      setPartsPlanReview(event.target.checked);
+                      creationKey.current = undefined;
+                    }}
+                  />
+                  <span>识别完成后先让我确认部件（推荐）</span>
+                </label>
                 <span>
                   {partsReady
                     ? '仅几何、无纹理；最多 16 个部件；尺寸与隐藏结构未验证'

@@ -32,6 +32,7 @@ export function useWorkbench() {
   const [localSegmentation, setLocalSegmentation] = useState<'auto' | 'sam2' | 'basic'>('auto');
   const [objectCategory, setObjectCategory] = useState('');
   const [autoRetry, setAutoRetry] = useState(true);
+  const [partsPlanReview, setPartsPlanReview] = useState(true);
   const [editedPreview, setEditedPreview] = useState<{
     jobId: string;
     url: string;
@@ -367,6 +368,7 @@ export function useWorkbench() {
           color,
           levels,
           allow_external: consent,
+          parts_plan_review: partsPlanReview,
         },
         { 'Idempotency-Key': creationKey.current },
       );
@@ -431,6 +433,8 @@ export function useWorkbench() {
   }
 
   return {
+    partsPlanReview,
+    setPartsPlanReview,
     partsReady,
     partsCategoryReady,
     config,
