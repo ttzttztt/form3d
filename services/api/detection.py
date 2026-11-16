@@ -1,4 +1,5 @@
 """Bridge to an isolated local ML interpreter; the web API stays lightweight."""
+
 import importlib.util
 import hashlib
 import json
@@ -11,7 +12,7 @@ from .gpu import GPU_LOCK
 ROOT = Path(__file__).resolve().parents[2]
 MODEL = ROOT / ".models" / "grounding-dino-tiny"
 LOCK = GPU_LOCK
-DETECTOR_REVISION = hashlib.sha256((ROOT / "scripts" / "detect_objects.py").read_bytes()).hexdigest()[:12]
+DETECTOR_REVISION = hashlib.sha256((ROOT / "services" / "workers" / "detect_objects.py").read_bytes()).hexdigest()[:12]
 
 
 def vision_python():
@@ -27,10 +28,24 @@ def vision_python():
 
 
 def detector_status():
-    ready = all((MODEL / file).is_file() for file in ["config.json", "model.safetensors", "preprocessor_config.json", "tokenizer_config.json", "vocab.txt"])
-    return {"available": bool(vision_python() and ready), "model": "Grounding DINO Tiny", "mode": "local",
-            "weights_ready": ready, "runtime_ready": bool(vision_python()),
-            "categories": ["柜子", "书柜", "花瓶", "沙发", "扶手椅", "椅子", "盆栽", "桌子", "落地灯"]}
+    ready = all(
+        (MODEL / file).is_file()
+        for file in [
+            "config.json",
+            "model.safetensors",
+            "preprocessor_config.json",
+            "tokenizer_config.json",
+            "vocab.txt",
+        ]
+    )
+    return {
+        "available": bool(vision_python() and ready),
+        "model": "Grounding DINO Tiny",
+        "mode": "local",
+        "weights_ready": ready,
+        "runtime_ready": bool(vision_python()),
+        "categories": ["柜子", "书柜", "花瓶", "沙发", "扶手椅", "椅子", "盆栽", "桌子", "落地灯"],
+    }
 
 
 def analyze_image(store, image_id):
@@ -42,10 +57,23 @@ def analyze_image(store, image_id):
         with LOCK:
             store.update_image(image_id, lambda item: item.update(analysis={"status": "running", "objects": []}))
             output = store.root / "images" / image_id / "detection.json"
-            completed = subprocess.run([vision_python(), str(ROOT / "scripts" / "detect_objects.py"),
-                                        "--input", str(store.root / image["normalized_path"]), "--output", str(output),
-                                        "--model", str(MODEL), "--device", os.getenv("VISION_DEVICE", "auto")],
-                                       capture_output=True, timeout=240, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            completed = subprocess.run(
+                [
+                    vision_python(),
+                    str(ROOT / "services" / "workers" / "detect_objects.py"),
+                    "--input",
+                    str(store.root / image["normalized_path"]),
+                    "--output",
+                    str(output),
+                    "--model",
+                    str(MODEL),
+                    "--device",
+                    os.getenv("VISION_DEVICE", "auto"),
+                ],
+                capture_output=True,
+                timeout=240,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
             (output.parent / "detection.log").write_bytes(completed.stdout + b"\n" + completed.stderr)
             if completed.returncode or not output.is_file():
                 raise ValueError("本地识别未能完成，可点击重新识别；详情见图片目录中的 detection.log")
@@ -54,4 +82,6 @@ def analyze_image(store, image_id):
             store.update_image(image_id, lambda item: item.update(analysis=result))
     except Exception as exc:
         message = str(exc) if isinstance(exc, ValueError) else "本地识别暂时失败，可重新识别或手工选择目标"
-        store.update_image(image_id, lambda item: item.update(analysis={"status": "failed", "objects": [], "error": message}))
+        store.update_image(
+            image_id, lambda item: item.update(analysis={"status": "failed", "objects": [], "error": message})
+        )

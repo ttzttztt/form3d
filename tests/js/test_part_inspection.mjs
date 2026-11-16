@@ -1,0 +1,73 @@
+import { build } from 'esbuild';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const bundle = await build({
+  stdin: {
+    contents:
+      "export {PartInspection} from './apps/web/src/partInspection';export {connectedMaskFaces} from './apps/web/src/samPartSelection';export * as THREE from 'three';export {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';",
+    resolveDir: process.cwd(),
+    loader: 'ts',
+  },
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false,
+});
+const { THREE, PartInspection, connectedMaskFaces, mergeGeometries } = await import(
+  'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
+);
+const model = new THREE.Group(),
+  a = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()),
+  b = a.clone();
+a.userData = { formPartId: 'a', formGroupId: 'left' };
+b.userData = { formPartId: 'b', formGroupId: 'right' };
+a.position.x = -1;
+b.position.x = 1;
+model.add(a, b);
+const sourceA = a.position.clone(),
+  sourceB = b.position.clone(),
+  inspection = new PartInspection(model, () => {});
+inspection.select(['a']);
+inspection.isolate();
+assert.equal(a.visible, true);
+assert.equal(b.visible, false);
+inspection.showAll();
+assert.equal(b.visible, true);
+inspection.select(['a']);
+inspection.hideSelected();
+assert.equal(a.visible, false);
+inspection.showAll();
+inspection.explode(1);
+assert.ok(a.position.distanceTo(sourceA) > 0.1);
+assert.ok(b.position.distanceTo(sourceB) > 0.1);
+inspection.showAll();
+assert.deepEqual(a.position.toArray(), sourceA.toArray());
+assert.deepEqual(b.position.toArray(), sourceB.toArray());
+const geom = mergeGeometries([new THREE.BoxGeometry(), new THREE.BoxGeometry().translate(3, 0, 0)]),
+  mesh = new THREE.Mesh(geom);
+mesh.userData.formPartId = 'one';
+const accepted = new Uint8Array(24).fill(1),
+  before = Array.from(geom.index.array);
+assert.equal(connectedMaskFaces(mesh, 0, accepted).length, 12);
+accepted[0] = 0;
+assert.throws(() => connectedMaskFaces(mesh, 0, accepted), /没有覆盖/);
+assert.deepEqual(Array.from(geom.index.array), before);
+inspection.dispose();
+const result = {
+  checks: [
+    'isolate',
+    'hide',
+    'restore_visibility',
+    'explode_without_editing_source',
+    'restore_positions',
+    'mask_keeps_only_seed_connected_region',
+    'mask_without_seed_refuses',
+    'original_face_indices_preserved',
+  ],
+  passed: 8,
+};
+await fs.writeFile(
+  '.data/checks/test_part_inspection/inspection_unit.json',
+  JSON.stringify(result, null, 2),
+);
+console.log(JSON.stringify(result));

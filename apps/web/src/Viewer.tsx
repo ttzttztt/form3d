@@ -89,8 +89,11 @@ export default function Viewer({
     draftStatusRef = useRef(onDraftStatus);
   draftRef.current = materialDraft;
   draftStatusRef.current = onDraftStatus;
-  const completionRef=useRef(completionBounds);completionRef.current=completionBounds;
-  useEffect(()=>{controller.current?.completionBox();},[completionBounds]);
+  const completionRef = useRef(completionBounds);
+  completionRef.current = completionBounds;
+  useEffect(() => {
+    controller.current?.completionBox();
+  }, [completionBounds]);
   useEffect(() => {
     controller.current?.material(materialDraft);
   }, [materialDraft]);
@@ -130,13 +133,21 @@ export default function Viewer({
     [showBoundary, setShowBoundary] = useState(true),
     [showSeams, setShowSeams] = useState(false),
     [seamMessage, setSeamMessage] = useState('');
-  const [showInferred,setShowInferred]=useState(false),[hasInferred,setHasInferred]=useState(false);
-  const [partColours,setPartColours]=useState(false),[hasSemanticParts,setHasSemanticParts]=useState(false);
-  const partColoursRef=useRef(partColours);partColoursRef.current=partColours;
-  const colourJob=useRef<string>();
-  useEffect(()=>{controller.current?.partColours(partColours);},[partColours]);
-  useEffect(()=>{if(materialDraft)setPartColours(false);},[materialDraft]);
-  const inferredRef=useRef(showInferred);inferredRef.current=showInferred;
+  const [showInferred, setShowInferred] = useState(false),
+    [hasInferred, setHasInferred] = useState(false);
+  const [partColours, setPartColours] = useState(false),
+    [hasSemanticParts, setHasSemanticParts] = useState(false);
+  const partColoursRef = useRef(partColours);
+  partColoursRef.current = partColours;
+  const colourJob = useRef<string>();
+  useEffect(() => {
+    controller.current?.partColours(partColours);
+  }, [partColours]);
+  useEffect(() => {
+    if (materialDraft) setPartColours(false);
+  }, [materialDraft]);
+  const inferredRef = useRef(showInferred);
+  inferredRef.current = showInferred;
   const promptModeRef = useRef(promptMode),
     samRangeRef = useRef(samRange),
     refineBoundaryRef = useRef(refineBoundary),
@@ -244,16 +255,40 @@ export default function Viewer({
       seamHelper: THREE.LineSegments | undefined,
       promptHelper: THREE.Points | undefined;
     let completionHelper: THREE.Box3Helper | undefined;
-    let inferredHelper:THREE.Group|undefined;
-    function clearInferred(){if(inferredHelper){scene.remove(inferredHelper);inferredHelper.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();(o.material as THREE.Material).dispose();}});inferredHelper=undefined;}}
-    function drawCompletionBox(){
-      if(completionHelper){scene.remove(completionHelper);completionHelper.geometry.dispose();(completionHelper.material as THREE.Material).dispose();completionHelper=undefined;}
-      const b=completionRef.current;
-      if(model&&b?.length===2&&b.every(row=>row.length===3&&row.every(Number.isFinite))){
-        const box=new THREE.Box3(new THREE.Vector3(...b[0]),new THREE.Vector3(...b[1])).translate(model.position);
-        completionHelper=new THREE.Box3Helper(box,0x009e72);scene.add(completionHelper);
+    let inferredHelper: THREE.Group | undefined;
+    function clearInferred() {
+      if (inferredHelper) {
+        scene.remove(inferredHelper);
+        inferredHelper.traverse((o) => {
+          if (o instanceof THREE.Mesh) {
+            o.geometry.dispose();
+            (o.material as THREE.Material).dispose();
+          }
+        });
+        inferredHelper = undefined;
       }
-      dirty=true;
+    }
+    function drawCompletionBox() {
+      if (completionHelper) {
+        scene.remove(completionHelper);
+        completionHelper.geometry.dispose();
+        (completionHelper.material as THREE.Material).dispose();
+        completionHelper = undefined;
+      }
+      const b = completionRef.current;
+      if (
+        model &&
+        b?.length === 2 &&
+        b.every((row) => row.length === 3 && row.every(Number.isFinite))
+      ) {
+        const box = new THREE.Box3(
+          new THREE.Vector3(...b[0]),
+          new THREE.Vector3(...b[1]),
+        ).translate(model.position);
+        completionHelper = new THREE.Box3Helper(box, 0x009e72);
+        scene.add(completionHelper);
+      }
+      dirty = true;
     }
     type Session = {
       mesh: THREE.Mesh;
@@ -317,8 +352,25 @@ export default function Viewer({
       model?.updateMatrixWorld(true);
       model?.traverseVisible((child) => {
         if (!(child instanceof THREE.Mesh) || !child.userData.formPartId) return;
-        if(inferredRef.current&&child.userData.formCompletionRole==='inferred_interface'){
-          inferredHelper??=new THREE.Group();const overlay=new THREE.Mesh(child.geometry.clone(),new THREE.MeshBasicMaterial({color:0xf0a044,transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));overlay.matrixAutoUpdate=false;overlay.matrix.copy(child.matrixWorld);overlay.renderOrder=12;inferredHelper.add(overlay);
+        if (inferredRef.current && child.userData.formCompletionRole === 'inferred_interface') {
+          inferredHelper ??= new THREE.Group();
+          const overlay = new THREE.Mesh(
+            child.geometry.clone(),
+            new THREE.MeshBasicMaterial({
+              color: 0xf0a044,
+              transparent: true,
+              opacity: 0.8,
+              side: THREE.DoubleSide,
+              depthWrite: false,
+              polygonOffset: true,
+              polygonOffsetFactor: -1,
+              polygonOffsetUnits: -1,
+            }),
+          );
+          overlay.matrixAutoUpdate = false;
+          overlay.matrix.copy(child.matrixWorld);
+          overlay.renderOrder = 12;
+          inferredHelper.add(overlay);
         }
         if (showBoundaryRef.current && faceMap[child.userData.formPartId])
           for (const value of selectionBoundary(child, faceMap[child.userData.formPartId]))
@@ -353,7 +405,7 @@ export default function Viewer({
       };
       boundaryHelper = line(boundary, 0xff8c20);
       seamHelper = line(seams, 0x168cdd);
-      if(inferredHelper)scene.add(inferredHelper);
+      if (inferredHelper) scene.add(inferredHelper);
       setSeamMessage(
         showSeamsRef.current
           ? foundUV
@@ -368,7 +420,7 @@ export default function Viewer({
       if (!session.cache) return;
       const proposal = session.cache.evaluate(range, refineBoundaryRef.current);
       undo.push(faceMap);
-      if(undo.length>20)undo.shift();
+      if (undo.length > 20) undo.shift();
       redo = [];
       showFaces(proposal.faces);
       setSelectionMessage(
@@ -395,7 +447,16 @@ export default function Viewer({
           jobId,
           version: url?.match(/\/assets\/([a-f0-9]{32})\//)?.[1] ?? 'original',
           signal: fitAbort.signal,
-          helpers: [helper, selectionHelper, faceHelper, boundaryHelper, seamHelper, promptHelper,completionHelper,inferredHelper],
+          helpers: [
+            helper,
+            selectionHelper,
+            faceHelper,
+            boundaryHelper,
+            seamHelper,
+            promptHelper,
+            completionHelper,
+            inferredHelper,
+          ],
           referenceCamera: session.cache?.referenceCamera,
         });
         if (disposed) return;
@@ -650,14 +711,18 @@ export default function Viewer({
             const extras = result.parser.json.meshes[meshIndex]?.primitives[number]?.extras;
             child.userData.formSelectionRole = extras?.form_selection_role;
             child.userData.formGroupId = extras?.form_logical_group_id;
-            child.userData.formCompletionRole=extras?.form_completion_role;
-            child.userData.formSemanticColor=extras?.form_semantic_color;
+            child.userData.formCompletionRole = extras?.form_completion_role;
+            child.userData.formSemanticColor = extras?.form_semantic_color;
           }
         });
         inspection = new PartInspection(model, () => {
           dirty = true;
         });
-        let inferred=false;model.traverse(o=>{if(o.userData.formCompletionRole==='inferred_interface')inferred=true;});setHasInferred(inferred);
+        let inferred = false;
+        model.traverse((o) => {
+          if (o.userData.formCompletionRole === 'inferred_interface') inferred = true;
+        });
+        setHasInferred(inferred);
         setExplosion(0);
         setSolo(false);
         const box = new THREE.Box3().setFromObject(model);
@@ -682,10 +747,17 @@ export default function Viewer({
           },
         );
         materialPreview.apply(draftRef.current);
-        let semantic=false;model.traverse(o=>{if(o.userData.formSemanticColor)semantic=true;});setHasSemanticParts(semantic);
-        const enableColours=semantic&&colourJob.current!==(jobId??url);
-        if(enableColours){colourJob.current=jobId??url;setPartColours(true);}
-        materialPreview.showPartColours(enableColours||partColoursRef.current);
+        let semantic = false;
+        model.traverse((o) => {
+          if (o.userData.formSemanticColor) semantic = true;
+        });
+        setHasSemanticParts(semantic);
+        const enableColours = semantic && colourJob.current !== (jobId ?? url);
+        if (enableColours) {
+          colourJob.current = jobId ?? url;
+          setPartColours(true);
+        }
+        materialPreview.showPartColours(enableColours || partColoursRef.current);
         const radius = Math.max(size.x, size.y, size.z, 0.01);
         helper = new THREE.GridHelper(radius * 3.4, 24, 0xd5dae4, 0xe3e7ef);
         helper.position.y = -0.002;
@@ -1042,7 +1114,7 @@ export default function Viewer({
       controls.dispose();
       clearInferred();
       materialPreview?.dispose();
-        for (const helper of [boundaryHelper, seamHelper, promptHelper,completionHelper])
+      for (const helper of [boundaryHelper, seamHelper, promptHelper, completionHelper])
         if (helper) {
           helper.geometry.dispose();
           (helper.material as THREE.Material).dispose();
@@ -1079,7 +1151,10 @@ export default function Viewer({
   }, [url, label]);
 
   return (
-    <div className={'viewer' + (onFacesChange||inspectionOnly ? ' has-edit-tools' : '')} data-testid="model-viewer">
+    <div
+      className={'viewer' + (onFacesChange || inspectionOnly ? ' has-edit-tools' : '')}
+      data-testid="model-viewer"
+    >
       <div className="viewer-canvas" ref={host} />
       {overlay && referenceUrl && (
         <img
@@ -1154,13 +1229,37 @@ export default function Viewer({
             </button>
           </div>
           <span className="viewer-hint">拖动旋转 · 滚轮缩放 · 右键平移</span>
-          {inspectionOnly && !onFacesChange && <div className="face-tools" ref={toolsHost}>
-            <div className="selection-actions"><button aria-pressed={solo} disabled={!selectedRef.current.length} onClick={()=>controller.current?.inspect('solo')}>仅看选中整体部件</button><button onClick={()=>controller.current?.inspect('all')}>显示所有整体部件</button><button onClick={()=>controller.current?.inspect('back')}>查看背面</button><button onClick={()=>controller.current?.inspect('under')}>查看底面</button></div>
-            <p>点击模型或部件名称选中整个候选；拖动旋转检查边界。</p>
-          </div>}
+          {inspectionOnly && !onFacesChange && (
+            <div className="face-tools" ref={toolsHost}>
+              <div className="selection-actions">
+                <button
+                  aria-pressed={solo}
+                  disabled={!selectedRef.current.length}
+                  onClick={() => controller.current?.inspect('solo')}
+                >
+                  仅看选中整体部件
+                </button>
+                <button onClick={() => controller.current?.inspect('all')}>显示所有整体部件</button>
+                <button onClick={() => controller.current?.inspect('back')}>查看背面</button>
+                <button onClick={() => controller.current?.inspect('under')}>查看底面</button>
+              </div>
+              <p>点击模型或部件名称选中整个候选；拖动旋转检查边界。</p>
+            </div>
+          )}
           {onFacesChange && (
             <div className="face-tools" ref={toolsHost} data-selected-faces={faceCount}>
-              {hasSemanticParts && <label><input type="checkbox" aria-label="显示整体部件分色" disabled={!!materialDraft} checked={partColours} onChange={e=>setPartColours(e.target.checked)}/>显示整体部件分色（不改变材质）</label>}
+              {hasSemanticParts && (
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label="显示整体部件分色"
+                    disabled={!!materialDraft}
+                    checked={partColours}
+                    onChange={(e) => setPartColours(e.target.checked)}
+                  />
+                  显示整体部件分色（不改变材质）
+                </label>
+              )}
               <div className="selection-tool-row" role="group" aria-label="模型操作">
                 {(
                   [
@@ -1353,7 +1452,29 @@ export default function Viewer({
                   显示蓝色 UV 接缝
                 </label>
                 {seamMessage && <p role="status">{seamMessage}</p>}
-                {hasInferred&&<><label><input type="checkbox" aria-label="显示推测接合面" checked={showInferred} disabled={editingDisabled} onChange={e=>{inferredRef.current=e.target.checked;setShowInferred(e.target.checked);controller.current?.review();}}/>显示推测接合面</label>{showInferred&&<p role="status">橙色面为推测的接合面。隔离部件或查看背面、底面可检查，不代表实物隐藏结构。</p>}</>}
+                {hasInferred && (
+                  <>
+                    <label>
+                      <input
+                        type="checkbox"
+                        aria-label="显示推测接合面"
+                        checked={showInferred}
+                        disabled={editingDisabled}
+                        onChange={(e) => {
+                          inferredRef.current = e.target.checked;
+                          setShowInferred(e.target.checked);
+                          controller.current?.review();
+                        }}
+                      />
+                      显示推测接合面
+                    </label>
+                    {showInferred && (
+                      <p role="status">
+                        橙色面为推测的接合面。隔离部件或查看背面、底面可检查，不代表实物隐藏结构。
+                      </p>
+                    )}
+                  </>
+                )}
                 <div className="selection-actions">
                   <button
                     disabled={editingDisabled || !selectedRef.current.length}

@@ -1,0 +1,15 @@
+# Binary assets go through Git LFS (see docs/ASSETS.md). Run `git lfs install` once before adding them.
+library/**/*.glb filter=lfs diff=lfs merge=lfs -text
+library/**/*.png filter=lfs diff=lfs merge=lfs -text
+library/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+library/**/*.zip filter=lfs diff=lfs merge=lfs -text
+assets/** filter=lfs diff=lfs merge=lfs -text
+modeling/scenes/** filter=lfs diff=lfs merge=lfs -text
+modeling/references/** filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text
+# Text files stay normal Git so they diff and review.
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.sh text eol=lf

@@ -10,7 +10,7 @@ if (!(Test-Path -LiteralPath $pythonPath)) {
 if ($Install) {
     & $pythonPath -m pip install -r requirements.txt --disable-pip-version-check
     if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed.' }
-    npm ci --registry=https://registry.npmjs.org --no-audit --no-fund
+    npm ci --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'Node dependency installation failed.' }
     npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }

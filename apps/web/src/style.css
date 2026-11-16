@@ -3190,3 +3190,102 @@ main {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Parts-first: plan review step and lazy-loaded 3D fallback */
+.parts-review-toggle {
+  margin-top: 10px;
+}
+.parts-plan-review {
+  margin: 14px 22px 0;
+  border: 1px solid #e3dbf3;
+  background: #fbf9fe;
+  border-radius: 8px;
+  padding: 14px;
+}
+.parts-plan-review header strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b3d73;
+}
+.parts-plan-review header span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #7d7395;
+}
+.parts-plan-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+  align-items: start;
+}
+.parts-plan-image img {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.parts-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+}
+.parts-plan-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.parts-plan-list li.removed {
+  opacity: 0.5;
+}
+.parts-plan-list select {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.parts-plan-index {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--purple);
+  color: #fff;
+  font-size: 11px;
+}
+.parts-plan-problem {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #b1513f;
+}
+.parts-plan-review footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lazy-fallback {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .parts-plan-body {
+    grid-template-columns: 1fr;
+  }
+}
