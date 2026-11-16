@@ -1,6 +1,6 @@
 # AI 整体部件识别、分色与多家具验收
 
-日期：2026-11-13。[图片与证据总览](../experiments/semantic_parts_20261113/index.html)。[皮质沙发演示](http://127.0.0.1:8001/?job=dbac18425968413681567e1d5500de2d)。
+日期：2026-11-13。[图片与证据总览](../../experiments/semantic_parts_20261113/index.html)。[皮质沙发演示](http://127.0.0.1:8001/?job=dbac18425968413681567e1d5500de2d)。
 
 ## 当前结论
 
@@ -77,6 +77,6 @@
 
 本轮解决了“每一个小面片都像一个部件”的主要交互和归组问题，但项目还不能认定优化完毕。后续最明确的两项是：准确区分坐面与固定扶手 / 底座，以及为已确认的整体部件补齐可检查的隐藏接口。完整坐垫、靠枕实体闭合、任意家具语义准确拆分与真实制造结构仍未达标。
 
-主要实现：[整体识别面板](../apps/web/src/SemanticPartsPanel.tsx)、[后台识别服务](../services/api/semantic_parts.py)、[校准映射与实例关联](../scripts/semantic_mapping.py)、[整体归组](../scripts/semantic_asset.py)、[圆柱证据](../scripts/cylinder_evidence.py)。
+主要实现：[整体识别面板](../../apps/web/src/SemanticPartsPanel.tsx)、[后台识别服务](../../services/api/semantic_parts.py)、[校准映射与实例关联](../../services/workers/semantic_mapping.py)、[整体归组](../../services/workers/semantic_asset.py)、[圆柱证据](../../services/workers/cylinder_evidence.py)。
 
 原始记录目录 experiments/semantic_parts_20261113：summary、audit、scans、scans_baseline、table_guard_run、ui_results、colour_tests、demo_browser、gltf_validation，以及各模型的 manifest / views / detections / assignments / renders。旧轮沙发失败样本和报告未覆盖。

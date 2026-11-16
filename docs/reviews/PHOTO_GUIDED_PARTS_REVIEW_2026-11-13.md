@@ -90,9 +90,9 @@
 
 ## 证据与实现
 
-- [可放大图片与完整结果页](../experiments/photo_guided_parts_20261113/index.html)
-- [独立核验 JSON](../experiments/photo_guided_parts_20261113/verification.json)
-- [靠枕网页记录](../experiments/photo_guided_parts_20261113/corduroy_center_ui.json)、[坐垫网页记录](../experiments/photo_guided_parts_20261113/leather_seat_ui.json)、[拒绝记录](../experiments/photo_guided_parts_20261113/corduroy_side_ui.json)
-- [额外扶手椅保护](../experiments/photo_guided_parts_20261113/additional_chair_guard.json)
-- [API 回归日志](../experiments/photo_guided_parts_20261113/full_api_final.log)、[几何回归日志](../experiments/photo_guided_parts_20261113/full_geometry_final.log)
-- 主要实现：`services/api/part_optimization.py`、`services/api/part_regeneration.py`、`scripts/photo_part_evidence.py`、`scripts/auto_part_optimization.py`、`scripts/refine_photo_part.py`、`scripts/soft_surface_details.py`、`apps/web/src/PartRegenerationPanel.tsx`。
+- [可放大图片与完整结果页](../../experiments/photo_guided_parts_20261113/index.html)
+- [独立核验 JSON](../../experiments/photo_guided_parts_20261113/verification.json)
+- [靠枕网页记录](../../experiments/photo_guided_parts_20261113/corduroy_center_ui.json)、[坐垫网页记录](../../experiments/photo_guided_parts_20261113/leather_seat_ui.json)、[拒绝记录](../../experiments/photo_guided_parts_20261113/corduroy_side_ui.json)
+- [额外扶手椅保护](../../experiments/photo_guided_parts_20261113/additional_chair_guard.json)
+- [API 回归日志](../../experiments/photo_guided_parts_20261113/full_api_final.log)、[几何回归日志](../../experiments/photo_guided_parts_20261113/full_geometry_final.log)
+- 主要实现：`services/api/part_optimization.py`、`services/api/part_regeneration.py`、`services/workers/photo_part_evidence.py`、`services/workers/auto_part_optimization.py`、`services/workers/refine_photo_part.py`、`services/workers/soft_surface_details.py`、`apps/web/src/PartRegenerationPanel.tsx`。

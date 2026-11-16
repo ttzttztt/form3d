@@ -1,6 +1,6 @@
 # 多点选区、候选范围、边界检查、结构细节与 UV 验收
 
-日期：2026-11-12。当前工作台：[http://127.0.0.1:8001](http://127.0.0.1:8001)。[图片与原始证据总览](../experiments/selection_refinement_20261112/index.html)。本轮不覆盖前两轮报告。
+日期：2026-11-12。当前工作台：[http://127.0.0.1:8001](http://127.0.0.1:8001)。[图片与原始证据总览](../../experiments/selection_refinement_20261112/index.html)。本轮不覆盖前两轮报告。
 
 ## 结论与验收边界
 
@@ -57,7 +57,7 @@ TripoSR：提取分辨率 192 → 256。Hunyuan：提取分辨率 256 → 384，
 | chair_hunyuan_structure | 256 → 384 | 671,488 → 1,507,468 | 128.00 → 146.56 | 89fcd5efbcb2476eb5e7283834f5b88b |
 | cabinet_hunyuan_structure | 256 → 384 | 251,864 → 571,808 | 73.31 → 160.66 | df68fb654aac46d6a277fb9934de5118 |
 
-![常规与结构细节的固定视角对照](../experiments/selection_refinement_20261112/structure_contact.png)
+![常规与结构细节的固定视角对照](../../experiments/selection_refinement_20261112/structure_contact.png)
 
 每行依次为常规前侧、常规背面下视、细节前侧、细节背面下视。使用相同相机、显示归一化、统一中性材质；没有拟合原图相机，不能直接计算照片还原分数。
 
@@ -92,7 +92,7 @@ TripoSR：提取分辨率 192 → 256。Hunyuan：提取分辨率 256 → 384，
 
 圆桌环绕接缝值 15.062，分区 15.526；连续域从 169 减为 60，但桌面边沿和底面仍有接缝。代理圆桌反而增加接缝，因此默认拒绝。代码书柜显式代理平均拉伸约 2.85，也不应推荐。
 
-![八家具的诊断棋盘格对照](../experiments/selection_refinement_20261112/uv_contact.png)
+![八家具的诊断棋盘格对照](../../experiments/selection_refinement_20261112/uv_contact.png)
 
 棋盘图是诊断材质，不是商品材质恢复。各算法图集利用率不同，即使重复次数相同，物理格子大小也不同；比较密度和颜色不能得出还原提升。背面下视另见 `uv_under_contact.png`。蓝椅代理仍有花纹方向跳变；自动保护只能控制所测指标，不能消除所有接缝。
 

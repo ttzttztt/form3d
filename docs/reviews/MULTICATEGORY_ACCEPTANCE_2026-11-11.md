@@ -4,9 +4,9 @@
 
 本轮固定 11 例：本地 5 张白底商品图、2 张场景商品图，以及公开 COCO128 的 4 张场景图。浴室小盆栽图疑似渲染图，在来源复核中单列，不能声称 6 张场景都是实拍。公开压缩包约 6.7 MiB，下载地址、日期和 SHA-256 已记录。用户图片仅在本机处理，原图和上轮实验均保留。
 
-[可筛选的本地验收报告](../experiments/multicategory_20261111/index.html) · [机器可读记录](../experiments/multicategory_20261111/acceptance.json) · [事前固定协议](../experiments/multicategory_20261111/protocol.json)
+[可筛选的本地验收报告](../../experiments/multicategory_20261111/index.html) · [机器可读记录](../../experiments/multicategory_20261111/acceptance.json) · [事前固定协议](../../experiments/multicategory_20261111/protocol.json)
 
-![代表样本的输入与实际 GLB 对照](../experiments/multicategory_20261111/examples_overview.png)
+![代表样本的输入与实际 GLB 对照](../../experiments/multicategory_20261111/examples_overview.png)
 
 ## 本次观察数量
 

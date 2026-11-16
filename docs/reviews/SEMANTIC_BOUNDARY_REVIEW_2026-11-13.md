@@ -1,6 +1,6 @@
 # 多视角部件边界约束、失败复测与审查报告
 
-日期：2026-11-13。[图像与证据](../experiments/semantic_refinement_20261113/index.html)。[灯芯绒沙发演示](http://127.0.0.1:8001/?job=ec42dc67be9a457199baa73f4616a6f2)。
+日期：2026-11-13。[图像与证据](../../experiments/semantic_refinement_20261113/index.html)。[灯芯绒沙发演示](http://127.0.0.1:8001/?job=ec42dc67be9a457199baa73f4616a6f2)。
 
 ## 实际完成的改善
 

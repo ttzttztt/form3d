@@ -1,6 +1,6 @@
 # 坐垫完整拆分、推测接合面与拆装材质验收
 
-验收日期：2026-11-13；工作始于 2026-11-12。[交互图片与原始记录](../experiments/complete_cushion_20261112/index.html)。[打开最终装配副本](http://127.0.0.1:8001/?job=58218e68edfd42889d295436a8e1ed42)。
+验收日期：2026-11-13；工作始于 2026-11-12。[交互图片与原始记录](../../experiments/complete_cushion_20261112/index.html)。[打开最终装配副本](http://127.0.0.1:8001/?job=58218e68edfd42889d295436a8e1ed42)。
 
 ## 结论
 
@@ -43,13 +43,13 @@ API 默认副本 `9a7976f62cab47e0a8c9d28eae8e2a22` 与浏览器副本 `58218e68
 
 ## 4. 目测与未通过的试跑
 
-![旧表面、完整候选和推测区域的四向对照](../experiments/complete_cushion_20261112/part_comparison.png)
+![旧表面、完整候选和推测区域的四向对照](../../experiments/complete_cushion_20261112/part_comparison.png)
 
 每行分别为前侧、后侧、底面、侧面；每列为旧表面、完整候选、推测区域诊断（橙色）。图像为独立 Blender 导入后的渲染，做了显示归一化，没有拟合原图相机。
 
 初版矩形外框可以闭合，但会带入不合理的方块边角；**初版外观没有通过**。已保留到 `box_trial/`，其 side / under 渲染不能作为最终效果宣传。最终增加轮廓与顶面约束，减少了这些边角。仍能看见切分痕迹和近似侧背形状，没有恢复真实面料包边、缝线、圆角或内部骨架。用户仍需核对。
 
-![原图、原生成模型、装配与移开检查](../experiments/complete_cushion_20261112/assembly_comparison.png)
+![原图、原生成模型、装配与移开检查](../../experiments/complete_cushion_20261112/assembly_comparison.png)
 
 ## 5. 换材质、移动、导出
 
@@ -59,7 +59,7 @@ API 默认副本 `9a7976f62cab47e0a8c9d28eae8e2a22` 与浏览器副本 `58218e68
 - 修复为独立节点变换，原顶点和其他属性字节保持不变。新的移动后浏览器导出重新加载，开口和非流形边均为 0，闭合与朝向检查通过。
 - 最终演示恢复到了完整装配的局部换色版本，移动版本仍在历史中，可继续对照。
 
-可下载：[独立坐垫](../experiments/complete_cushion_20261112/cushion_export.glb)、[浏览器移动后导出的坐垫](../experiments/complete_cushion_20261112/browser_cushion_export.glb)、[整体局部换色](../experiments/complete_cushion_20261112/complete_colored.glb)。
+可下载：[独立坐垫](../../experiments/complete_cushion_20261112/cushion_export.glb)、[浏览器移动后导出的坐垫](../../experiments/complete_cushion_20261112/browser_cushion_export.glb)、[整体局部换色](../../experiments/complete_cushion_20261112/complete_colored.glb)。
 
 ## 6. 界面用法
 

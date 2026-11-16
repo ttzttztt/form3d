@@ -58,12 +58,12 @@ Hunyuan 采用 Tencent Hunyuan Community License，并非 TripoSR 的 MIT 许可
 
 ## 复查入口
 
-- [完整图文报告](../experiments/quality_20261111/index.html)
-- [原图 / 旧版 / 新版灰模总览](../experiments/quality_20261111/comparison_overview.png)
-- [原始运行数据、输入和模型哈希、失败索引](../experiments/quality_20261111/acceptance.json)
-- [预先固定的验收协议](../experiments/quality_20261111/protocol.json)
-- [逐项目视判断](../experiments/quality_20261111/visual_review.json)
-- [网页真实推理验证](../experiments/quality_20261111/web_workflow.json)
+- [完整图文报告](../../experiments/quality_20261111/index.html)
+- [原图 / 旧版 / 新版灰模总览](../../experiments/quality_20261111/comparison_overview.png)
+- [原始运行数据、输入和模型哈希、失败索引](../../experiments/quality_20261111/acceptance.json)
+- [预先固定的验收协议](../../experiments/quality_20261111/protocol.json)
+- [逐项目视判断](../../experiments/quality_20261111/visual_review.json)
+- [网页真实推理验证](../../experiments/quality_20261111/web_workflow.json)
 
 工作台用法：选择“本地自动生成”，在“本地模型”中选“Hunyuan3D-2mini · 几何实验”。当前仅生成中性灰色形状，结果仍进入待审核；不自动替用户点“审核通过”。
 

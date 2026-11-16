@@ -105,4 +105,4 @@ Blender 5.1.2 实际导入导出的 GLB，保留材质，生成 **17 张**原版
 
 后续建议顺序：先补真实材质库、UV 展开与贴图接缝检查；再做具备标注样本的语义部件拆分；再接明确支持多图并实际融合输入的重建路线；最后做保留 UV 的轻量化与同步相机的版本差异查看。现有三角面与文件校验不能代替这些质量工作。
 
-证据入口：[HTML 看板](../experiments/asset_upgrade_20261112/index.html)。主要数据：`acceptance.json`、`real_edits.json`、`geometry_preservation.json`、`browser_checks.json`、`review_smoke.json`。报告生成器：`scripts/build_asset_upgrade_report.py`。
+证据入口：[HTML 看板](../../experiments/asset_upgrade_20261112/index.html)。主要数据：`acceptance.json`、`real_edits.json`、`geometry_preservation.json`、`browser_checks.json`、`review_smoke.json`。报告生成器：`scripts/build_asset_upgrade_report.py`。

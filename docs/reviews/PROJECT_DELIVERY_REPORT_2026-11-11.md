@@ -4,9 +4,9 @@
 
 本次完成的是可运行的本地单人工作台：图片选择、主体处理、输入拦截、本地生成、输出几何检查、有限返工、人工审核、版本化分组与材质编辑、GLB 导出。已经运行真实图片和真实模型，并保存失败结果。**本次自动重建测试仍没有通过完整商品还原验收的样本；不改变历史手工作品和用户审核记录。**
 
-[打开工作台](http://127.0.0.1:8000) · [图像与证据总览](../experiments/project_delivery_20261111/index.html) · [机器可读验收](../experiments/project_delivery_20261111/acceptance.json)
+[打开工作台](http://127.0.0.1:8000) · [图像与证据总览](../../experiments/project_delivery_20261111/index.html) · [机器可读验收](../../experiments/project_delivery_20261111/acceptance.json)
 
-![真实编辑与返工对照](../experiments/project_delivery_20261111/delivery_overview.png)
+![真实编辑与返工对照](../../experiments/project_delivery_20261111/delivery_overview.png)
 
 ## 1. 本次新增交付
 
@@ -72,7 +72,7 @@ flowchart TD
 - 真实 TripoSR 彩色模型也做了验证：替换模式移除旧顶点色影响，染色模式保留顶点色，避免用户换色却仍被原预测颜色覆盖。
 - 最终编辑 GLB 在 Blender 中再次导入并用自身材质渲染，未覆盖成灰模；glTF Validator 为 0 错误、0 警告。
 
-[打开当前盆栽编辑示例](http://127.0.0.1:8000/?job=6eab9c5a4a9545febbfc0835fd89ee4e) · [固定导出 GLB](../experiments/asset_editor_20261111/final_edited_plant.glb) · [外部查看器渲染](../experiments/asset_editor_20261111/edited_materials_blender.png) · [几何保持证据](../experiments/asset_editor_20261111/geometry_preservation.json)
+[打开当前盆栽编辑示例](http://127.0.0.1:8000/?job=6eab9c5a4a9545febbfc0835fd89ee4e) · [固定导出 GLB](../../experiments/asset_editor_20261111/final_edited_plant.glb) · [外部查看器渲染](../../experiments/asset_editor_20261111/edited_materials_blender.png) · [几何保持证据](../../experiments/asset_editor_20261111/geometry_preservation.json)
 
 固定导出 SHA-256：`4b5c08f3170f8b67d4176ce6bd40aab68eba1dd89f45bd502881c47db414a928`。原始 GLB 为 8,115,916 字节，固定导出为 12,179,040 字节。分组增加索引，版本当前按完整文件保存，没有宣称轻量化。
 
@@ -106,10 +106,10 @@ flowchart TD
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv-preflight\Scripts\python.exe scripts/test_input_preflight.py
-.\.venv-3d\Scripts\python.exe scripts/test_local3d_preprocess.py
-.\.venv-hunyuan\Scripts\python.exe scripts/test_output_geometry.py
-.\.venv-hunyuan\Scripts\python.exe scripts/test_asset_grouping.py
+.\.venv-preflight\Scripts\python.exe tests/workers/test_input_preflight.py
+.\.venv-3d\Scripts\python.exe tests/workers/test_local3d_preprocess.py
+.\.venv-hunyuan\Scripts\python.exe tests/workers/test_output_geometry.py
+.\.venv-hunyuan\Scripts\python.exe tests/workers/test_asset_grouping.py
 npm run build
 node scripts/test_asset_editor_workflow.mjs
 ```
@@ -149,8 +149,8 @@ node scripts/test_asset_editor_workflow.mjs
 
 ## 10. 代码、数据与运行维护
 
-- 输出检查：`scripts/analyze_geometry.py`、`services/api/output_quality.py`、`services/api/local3d.py`、`services/api/pipeline.py`。
-- 编辑：`services/api/glb_document.py`、`services/api/asset_editor.py`、`scripts/edit_asset.py`、`apps/web/src/AssetEditor.tsx`、`apps/web/src/Viewer.tsx`。
+- 输出检查：`services/workers/analyze_geometry.py`、`services/api/output_quality.py`、`services/api/local3d.py`、`services/api/pipeline.py`。
+- 编辑：`services/api/glb_document.py`、`services/api/asset_editor.py`、`services/workers/edit_asset.py`、`apps/web/src/AssetEditor.tsx`、`apps/web/src/Viewer.tsx`。
 - 几何诊断：`.data/jobs/<id>/attempts/`；编辑版本：`.data/jobs/<id>/assets/<version>/`，附请求、manifest 和操作日志。
 - 真实验证：`experiments/output_quality_20261111/`、`experiments/asset_editor_20261111/`；本报告证据索引：`experiments/project_delivery_20261111/acceptance.json`。
 - 核心接口：`GET /api/jobs/<id>/asset`、`POST /api/jobs/<id>/asset/versions`、`POST /api/jobs/<id>/assets/<version>/review`、`GET /api/jobs/<id>/assets/<version>/model.glb`。

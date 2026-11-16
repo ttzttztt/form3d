@@ -39,6 +39,6 @@
 
 新版演示：[圆桌局部换色](http://127.0.0.1:8000/?job=800c7867b9124a4c8b68480cdfeaa9a1)。默认界面截图：`desktop_default.png`；选区截图：`table_visible_selection.png`；换色后截图：`desktop_after_material.png`；手机截图：`mobile.png`。
 
-运行 `node scripts/test_visible_selection.mjs` 检查遮挡与索引；`node scripts/test_selection_ux.mjs` 检查真实编辑与界面；`node scripts/test_selection_additional.mjs` 检查补充模型。脚本使用独立测试副本，记录在 `experiments/selection_ux_20261112/cases.json`，没有改写用户原始模型。
+运行 `node tests/e2e/test_visible_selection.mjs` 检查遮挡与索引；`node scripts/test_selection_ux.mjs` 检查真实编辑与界面；`node scripts/test_selection_additional.mjs` 检查补充模型。脚本使用独立测试副本，记录在 `experiments/selection_ux_20261112/cases.json`，没有改写用户原始模型。
 
-本轮代码涉及 `faceSelection.ts`、`selectionVisibility.ts`、`Viewer.tsx`、`AssetEditor.tsx`、`App.tsx`、`style.css`、`scripts/edit_asset.py`、`glb_document.py` 与新增测试。此前较复杂界面的记录仍保留在前一轮报告中，以本轮行为说明为准。
+本轮代码涉及 `faceSelection.ts`、`selectionVisibility.ts`、`Viewer.tsx`、`AssetEditor.tsx`、`App.tsx`、`style.css`、`services/workers/edit_asset.py`、`glb_document.py` 与新增测试。此前较复杂界面的记录仍保留在前一轮报告中，以本轮行为说明为准。

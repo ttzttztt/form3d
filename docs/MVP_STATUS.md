@@ -2,19 +2,19 @@
 
 实现日期：2026-11-10。
 
-2026-11-11 最新阶段：输出几何筛查、最多一次本地模型返工、失败诊断候选、目标品类意图、版本化几何分组及整体/局部参数材质编辑已接入；编辑版本独立审核，不覆盖或继承原模型审核。真实流程、测试范围和后续语义部件/PBR 工作见 [详细阶段报告](PROJECT_DELIVERY_REPORT_2026-11-11.md)。当前仍是单机工作台，几何检查通过不代表商品还原合格。
+2026-11-11 最新阶段：输出几何筛查、最多一次本地模型返工、失败诊断候选、目标品类意图、版本化几何分组及整体/局部参数材质编辑已接入；编辑版本独立审核，不覆盖或继承原模型审核。真实流程、测试范围和后续语义部件/PBR 工作见 [详细阶段报告](reviews/PROJECT_DELIVERY_REPORT_2026-11-11.md)。当前仍是单机工作台，几何检查通过不代表商品还原合格。
 
-2026-11-11 后续：新增本地 OCR 尺寸标注/独立双端引线清理、原图背景分类与紧裁剪 SAM 细分、掩码/像素/遮挡风险拦截。`local` 任务可因输入问题进入 `awaiting_input`，只展示处理图与原因，不启动形状推理；需要修改图片后创建新任务，不会通过云端“恢复查询”绕过检查。遮挡补全与语义对象擦除尚未实现。真实复测、发现的回归及独立修正记录见 [输入检查验收](INPUT_GUARD_ACCEPTANCE_2026-11-11.md)。
+2026-11-11 后续：新增本地 OCR 尺寸标注/独立双端引线清理、原图背景分类与紧裁剪 SAM 细分、掩码/像素/遮挡风险拦截。`local` 任务可因输入问题进入 `awaiting_input`，只展示处理图与原因，不启动形状推理；需要修改图片后创建新任务，不会通过云端“恢复查询”绕过检查。遮挡补全与语义对象擦除尚未实现。真实复测、发现的回归及独立修正记录见 [输入检查验收](reviews/INPUT_GUARD_ACCEPTANCE_2026-11-11.md)。
 
-2026-11-11 后续：已接入本地 SAM 2.1 Hiera Tiny。自动模式对复杂背景按选中目标框分割，白底/透明输入保留基础处理；明确选择 SAM 时失败不回退。分割子进程与检测/3D 共用显卡锁，串行释放显存，掩码与叠加图在生成期间即可查看。不会补全不可见结构。真实同图复测与剩余问题见 [分割验收](SEGMENTATION_ACCEPTANCE_2026-11-11.md)，旧失败证据保留。
+2026-11-11 后续：已接入本地 SAM 2.1 Hiera Tiny。自动模式对复杂背景按选中目标框分割，白底/透明输入保留基础处理；明确选择 SAM 时失败不回退。分割子进程与检测/3D 共用显卡锁，串行释放显存，掩码与叠加图在生成期间即可查看。不会补全不可见结构。真实同图复测与剩余问题见 [分割验收](reviews/SEGMENTATION_ACCEPTANCE_2026-11-11.md)，旧失败证据保留。
 
-2026-11-11：新增 Hunyuan3D-2mini 几何实验选项，在独立 `.venv-hunyuan` 中以组件 CPU 卸载运行。三图实测和真实网页推理完成；两张干净图几何有改善，但场景扶手椅因分割丢靠背失败，纹理阶段未执行，完整商品外观尚未通过验收。详见 [质量验收记录](QUALITY_ACCEPTANCE_2026-11-11.md)。原有 TripoSR 快速彩色路线保留为默认。
+2026-11-11：新增 Hunyuan3D-2mini 几何实验选项，在独立 `.venv-hunyuan` 中以组件 CPU 卸载运行。三图实测和真实网页推理完成；两张干净图几何有改善，但场景扶手椅因分割丢靠背失败，纹理阶段未执行，完整商品外观尚未通过验收。详见 [质量验收记录](reviews/QUALITY_ACCEPTANCE_2026-11-11.md)。原有 TripoSR 快速彩色路线保留为默认。
 
 ## 本次更新：TripoSR 本地自动建模
 
 默认路线现为 `local`：裁剪/人工擦除 → 按策略分割（场景 SAM 2；透明通道保留、白底边缘分离或基础 U2NetP） → TripoSR CUDA 推理 → CPU 等值面提取 → 顶点着色 GLB → 完整校验 → 待审核。可另选 Hunyuan 几何实验。无需 API 密钥和对话介入；`assistant`、`template`、`meshy` 各自保留。
 
-源代码固定为 TripoSR Git tree `107cefdc244c39106fa830359024f6a2f1c78871`，模型固定为 Hugging Face revision `5b521936b01fbe1890f6f9baed0254ab6351c04a`。主权重 SHA-256 为 `429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee`。下载脚本为 `scripts/setup_local3d.py`，推理脚本为 `scripts/generate_local3d.py`，后端桥接为 `services/api/local3d.py`。
+源代码固定为 TripoSR Git tree `107cefdc244c39106fa830359024f6a2f1c78871`，模型固定为 Hugging Face revision `5b521936b01fbe1890f6f9baed0254ab6351c04a`。主权重 SHA-256 为 `429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee`。下载脚本为 `services/workers/setup_local3d.py`，推理脚本为 `services/workers/generate_local3d.py`，后端桥接为 `services/api/local3d.py`。
 
 3D 运行在独立 `.venv-3d` 中，和目标检测使用的 transformers 5.x 分开；本地使用 transformers 4.35.0。共享既有 CUDA torch，不修改原环境的软件。检测和生成共用显卡锁；取消会终止本任务的子进程。
 
@@ -30,9 +30,9 @@
 
 已知难例：三眼外星人造型桌被检测为低分扶手椅，桌面出现低分落地灯候选。界面用问号提示低分标签；分数不是类别正确率。这个模型的构建来自助手对原图的直接观察，不依赖该错误标签。当前方案尚不保证任意特殊造型的自动分类正确。
 
-无商业密钥的对话流程：上传/自动选目标 → 提交看图建模 → 在当前对话要求处理 → 助手查看图片并编写模型 → `scripts/attach_assistant_asset.py` 校验和导入 → 工作台回显与下载。
+无商业密钥的对话流程：上传/自动选目标 → 提交看图建模 → 在当前对话要求处理 → 助手查看图片并编写模型 → `scripts/tools/attach_assistant_asset.py` 校验和导入 → 工作台回显与下载。
 
-对应实现为 `scripts/detect_objects.py`、`services/api/detection.py`、`services/api/assistant_assets.py`。识别使用独立 ML 解释器，由 `VISION_PYTHON` 配置；本机复用已有环境，没有向其安装或升级软件。模型约 657 MB，缓存在 `.models/`，相同图片的检测结果可以复用。
+对应实现为 `services/workers/detect_objects.py`、`services/api/detection.py`、`services/api/assistant_assets.py`。识别使用独立 ML 解释器，由 `VISION_PYTHON` 配置；本机复用已有环境，没有向其安装或升级软件。模型约 657 MB，缓存在 `.models/`，相同图片的检测结果可以复用。
 
 已按两张真实上传图分别制作三眼造型床头桌和五层木书柜，输出位于 `library/models/assistant__*.glb`。源 `.blend`、实际 GLB 渲染预览和建模说明一并保留；所有尺寸均未核准。
 

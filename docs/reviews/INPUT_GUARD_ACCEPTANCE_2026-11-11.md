@@ -2,9 +2,9 @@
 
 本轮实现本地 RapidOCR 尺寸文字清理、独立双端尺寸引线清理、原图背景分类与紧裁剪细分，以及破碎掩码、低原生像素和遮挡/前景干扰候选拦截。原图、旧模型与首轮回归均保留。
 
-[逐件图像报告](../experiments/input_guard_20261111/index.html) · [实测 JSON](../experiments/input_guard_20261111/acceptance.json) · [修正记录](../experiments/input_guard_20261111/corrective_change.json)
+[逐件图像报告](../../experiments/input_guard_20261111/index.html) · [实测 JSON](../../experiments/input_guard_20261111/acceptance.json) · [修正记录](../../experiments/input_guard_20261111/corrective_change.json)
 
-![实际清理、复测与拦截](../experiments/input_guard_20261111/comparison_overview.png)
+![实际清理、复测与拦截](../../experiments/input_guard_20261111/comparison_overview.png)
 
 ## 同批 11 例的最终状态
 

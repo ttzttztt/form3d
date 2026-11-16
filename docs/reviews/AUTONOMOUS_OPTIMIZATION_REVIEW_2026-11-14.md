@@ -131,12 +131,12 @@ seed 77 虽有形状，也没有通过照片闸门；seed 123 仍是弯曲薄壳
 
 ## 查阅与复现
 
-- [图片、候选、失败与全部家具对照页](../experiments/autonomous_upgrade_20261113/index.html)
-- [最终数字摘要](../experiments/autonomous_upgrade_20261113/final_summary.json)
-- [可读时间线](../experiments/autonomous_upgrade_20261113/TIMELINE.md)、[逐条事件](../experiments/autonomous_upgrade_20261113/events.jsonl)、[家具注册表](../experiments/autonomous_upgrade_20261113/cases.json)
-- [最终矩阵](../experiments/autonomous_upgrade_20261113/static_material_matrix_reviewed.json)、[重新读取文件的独立验证](../experiments/autonomous_upgrade_20261113/independent_output_verification.json)
-- [完整网页流程](../experiments/autonomous_upgrade_20261113/browser_flow_v3.json)、[控制与故障恢复](../experiments/autonomous_upgrade_20261113/browser_controls_final.json)
-- [本轮代码 Review 记录](../experiments/autonomous_upgrade_20261113/CODE_REVIEW.md)
+- [图片、候选、失败与全部家具对照页](../../experiments/autonomous_upgrade_20261113/index.html)
+- [最终数字摘要](../../experiments/autonomous_upgrade_20261113/final_summary.json)
+- [可读时间线](../../experiments/autonomous_upgrade_20261113/TIMELINE.md)、[逐条事件](../../experiments/autonomous_upgrade_20261113/events.jsonl)、[家具注册表](../../experiments/autonomous_upgrade_20261113/cases.json)
+- [最终矩阵](../../experiments/autonomous_upgrade_20261113/static_material_matrix_reviewed.json)、[重新读取文件的独立验证](../../experiments/autonomous_upgrade_20261113/independent_output_verification.json)
+- [完整网页流程](../../experiments/autonomous_upgrade_20261113/browser_flow_v3.json)、[控制与故障恢复](../../experiments/autonomous_upgrade_20261113/browser_controls_final.json)
+- [本轮代码 Review 记录](../../experiments/autonomous_upgrade_20261113/CODE_REVIEW.md)
 - [本地工作台](http://127.0.0.1:8001/)，本轮未操作 8000，未提交 Git、未部署外网、未上传图片到外部服务。
 
-实际脚本：`scripts/test_upgrade_static_matrix.py`（使用 `.venv-hunyuan`）、`scripts/verify_upgrade_outputs.py`、`scripts/test_upgrade_workflow_ui.mjs`、`scripts/test_upgrade_controls_ui.mjs`、`scripts/render_upgrade_matrix.mjs`。测试均在独立副本上执行。重新测试使用新 tag，保留失败轮次；不要覆盖已有证据或将测试副本当成额外家具。
+实际脚本：`tests/workers/test_upgrade_static_matrix.py`（使用 `.venv-hunyuan`）、`scripts/verify_upgrade_outputs.py`、`scripts/test_upgrade_workflow_ui.mjs`、`scripts/test_upgrade_controls_ui.mjs`、`scripts/render_upgrade_matrix.mjs`。测试均在独立副本上执行。重新测试使用新 tag，保留失败轮次；不要覆盖已有证据或将测试副本当成额外家具。

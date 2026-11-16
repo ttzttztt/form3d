@@ -55,4 +55,4 @@
 
 下一步建议做“候选部件清单”：生成后先提出候选区域，允许逐个高亮、合并、拆分、命名，再统一换材质。要稳定列出“桌面、桌腿、坐垫”等名称并包含侧面/背面，需要真正的语义部件分割、跨视图关联和有标注样本的验收，当前尚未实现。继续堆几何阈值不能等同于完成这项能力。
 
-当前示例：[点选后的圆桌](http://127.0.0.1:8000/?job=34e37b6242f34276939dc20f369e59c1)。证据看板：[本地图像页](../experiments/point_selection_20261112/index.html)。脚本入口为 `scripts/test_point_selection.mjs`、`scripts/test_point_selection_ui.mjs`、`scripts/test_point_context_ui.mjs`、`scripts/verify_point_selection.py`；输出位于 `experiments/point_selection_20261112/`。
+当前示例：[点选后的圆桌](http://127.0.0.1:8000/?job=34e37b6242f34276939dc20f369e59c1)。证据看板：[本地图像页](../../experiments/point_selection_20261112/index.html)。脚本入口为 `scripts/test_point_selection.mjs`、`scripts/test_point_selection_ui.mjs`、`scripts/test_point_context_ui.mjs`、`scripts/verify_point_selection.py`；输出位于 `experiments/point_selection_20261112/`。

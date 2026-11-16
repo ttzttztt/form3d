@@ -97,9 +97,9 @@
 
 ## 证据位置
 
-- 可视化对比：[index.html](../experiments/part_regeneration_20261113/index.html)
-- 网页实际流程：[ui_results.json](../experiments/part_regeneration_20261113/ui_results.json)
-- 刷新与上传检查：[ui_controls.json](../experiments/part_regeneration_20261113/ui_controls.json)
-- 独立文件核对：[independent_verification.json](../experiments/part_regeneration_20261113/independent_verification.json)
-- 推测参考说明：[provenance.json](../experiments/part_regeneration_20261113/leather_cushion/completed_reference/provenance.json)
-- 核心实现：`services/api/part_regeneration.py`、`scripts/prepare_part_reference.py`、`scripts/replace_generated_part.py`、`scripts/part_registration.py`、`scripts/cushion_registration.py`、`apps/web/src/PartRegenerationPanel.tsx`。
+- 可视化对比：[index.html](../../experiments/part_regeneration_20261113/index.html)
+- 网页实际流程：[ui_results.json](../../experiments/part_regeneration_20261113/ui_results.json)
+- 刷新与上传检查：[ui_controls.json](../../experiments/part_regeneration_20261113/ui_controls.json)
+- 独立文件核对：[independent_verification.json](../../experiments/part_regeneration_20261113/independent_verification.json)
+- 推测参考说明：[provenance.json](../../experiments/part_regeneration_20261113/leather_cushion/completed_reference/provenance.json)
+- 核心实现：`services/api/part_regeneration.py`、`services/workers/prepare_part_reference.py`、`services/workers/replace_generated_part.py`、`services/workers/part_registration.py`、`services/workers/cushion_registration.py`、`apps/web/src/PartRegenerationPanel.tsx`。

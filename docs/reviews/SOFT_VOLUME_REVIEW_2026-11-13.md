@@ -83,11 +83,11 @@ review 还修正了：平面匹配把靠枕薄边当正面而放大的情况、�
 
 ## 证据文件
 
-- [四向结果与前后对比](../experiments/soft_part_quality_20261113/index.html)
-- [网页 AI 流程](../experiments/soft_part_quality_20261113/ui_results.json)
-- [网页坐垫修复](../experiments/soft_part_quality_20261113/ui_source_result.json)
-- [独立文件与相邻部件检查](../experiments/soft_part_quality_20261113/verification.json)
-- [外观审查记录](../experiments/soft_part_quality_20261113/visual_review.json)
-- [小前景拦截](../experiments/soft_part_quality_20261113/reference_guard.json)
+- [四向结果与前后对比](../../experiments/soft_part_quality_20261113/index.html)
+- [网页 AI 流程](../../experiments/soft_part_quality_20261113/ui_results.json)
+- [网页坐垫修复](../../experiments/soft_part_quality_20261113/ui_source_result.json)
+- [独立文件与相邻部件检查](../../experiments/soft_part_quality_20261113/verification.json)
+- [外观审查记录](../../experiments/soft_part_quality_20261113/visual_review.json)
+- [小前景拦截](../../experiments/soft_part_quality_20261113/reference_guard.json)
 
-主要实现：`scripts/observed_thickness.py`、`scripts/soft_part_repair.py`、`scripts/part_registration.py`、`scripts/replace_generated_part.py`、`services/api/part_regeneration.py`、`apps/web/src/PartRegenerationPanel.tsx`。
+主要实现：`services/workers/observed_thickness.py`、`services/workers/soft_part_repair.py`、`services/workers/part_registration.py`、`services/workers/replace_generated_part.py`、`services/api/part_regeneration.py`、`apps/web/src/PartRegenerationPanel.tsx`。

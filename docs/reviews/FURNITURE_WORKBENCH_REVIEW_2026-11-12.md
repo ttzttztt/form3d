@@ -8,7 +8,7 @@
 
 功能流程验收通过，商品级外观验收未全部通过。自动分组是几何编辑建议，沙发与柜子的边界仍较粗；修复只能小幅处理现有网格。薄腿、隐藏结构、真实尺寸、石材或布料纹理都不能据此宣称已还原。
 
-入口：[可视化证据总览](../experiments/furniture_workbench_20261112/index.html) · [圆桌完整部件示例](http://127.0.0.1:8000/?job=81f295c6c8e84f86b760a7922aa33bc4)。
+入口：[可视化证据总览](../../experiments/furniture_workbench_20261112/index.html) · [圆桌完整部件示例](http://127.0.0.1:8000/?job=81f295c6c8e84f86b760a7922aa33bc4)。
 
 ## 五项改动与使用方法
 
@@ -39,7 +39,7 @@
 
 圆桌专项：桌面共 239,052 面；包含朝上面 102,702、朝下面 99,724、近竖直圆边面 27,653。针对本样本已观察到的外圈区域，误留底座的圆环面为 0。另以底部渲染检查了圆环完整性；中心安装连接仍属于底座。
 
-![完整表面候选与底面](../experiments/furniture_workbench_20261112/round_table_groups_under.png)
+![完整表面候选与底面](../../experiments/furniture_workbench_20261112/round_table_groups_under.png)
 
 分组图使用人工指定的诊断颜色，仅帮助看边界，不是从照片恢复的材质；源模型和修复渲染保留原材质。相机为固定检查视角，没有拟合原照片。
 
@@ -84,7 +84,7 @@
 
 三次推理均到达 `awaiting_review`，文件结构和启发式几何筛查通过；工作台没有被自动标成外观合格。三份输出另在隔离副本上试了完整分组，均成功且世界三角面不变；椅子 3 组，两种茶几各 2 组。分组成功不能抵消源几何或纹理缺陷。
 
-![新图片与两种引擎实际输出](../experiments/furniture_workbench_20261112/new_generation_contact.jpg)
+![新图片与两种引擎实际输出](../../experiments/furniture_workbench_20261112/new_generation_contact.jpg)
 
 本轮支持的结论是：这张石材茶几可以优先使用 Hunyuan-mini 的几何草稿，再补真实石材贴图。不能仅凭这一张图，宣称某个引擎对所有桌子更好。蓝色扶手椅的细腿还需要更好的重建或人工处理。
 
@@ -107,13 +107,13 @@
 
 完整证据目录：`experiments/furniture_workbench_20261112/`。当前结果看 `real_runs.json`、`geometry_preservation.json`、`visual_acceptance.json`、`new_generation_runs.json`、`engine_comparison.json`、`external_renders.json` 和各浏览器结果。历史失败、原图、原始 GLB 均保留。
 
-主要实现：`scripts/furniture_parts.py`、`scripts/mesh_quality.py`、`services/api/asset_editor.py`、`services/api/textures.py`、`apps/web/src/AssetEditor.tsx`、`apps/web/src/Viewer.tsx`、`apps/web/src/materialPreview.ts`。本轮未提交 Git、未推送、未部署外网。
+主要实现：`services/workers/furniture_parts.py`、`services/workers/mesh_quality.py`、`services/api/asset_editor.py`、`services/api/textures.py`、`apps/web/src/AssetEditor.tsx`、`apps/web/src/Viewer.tsx`、`apps/web/src/materialPreview.ts`。本轮未提交 Git、未推送、未部署外网。
 
 ```powershell
 .venv/Scripts/python.exe -m unittest discover -s tests
-.venv-hunyuan/Scripts/python.exe scripts/test_asset_advanced.py
-.venv-hunyuan/Scripts/python.exe scripts/test_furniture_workbench.py
-node scripts/test_material_preview.mjs
+.venv-hunyuan/Scripts/python.exe tests/workers/test_asset_advanced.py
+.venv-hunyuan/Scripts/python.exe tests/workers/test_furniture_workbench.py
+node tests/js/test_material_preview.mjs
 npm run build
 node scripts/test_furniture_workbench_ui.mjs
 node scripts/test_furniture_guards.mjs

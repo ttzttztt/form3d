@@ -2,9 +2,9 @@
 
 已完成 Grounding DINO 候选框 → SAM 2.1 Hiera Tiny → 本地 3D 的接入，并对之前失败的同一张场景扶手椅完成真实网页推理。这个样本的主体分割及几何候选有明显改善；完整商品资产仍未通过，用户审核保持 `pending`。
 
-[打开真实任务](http://127.0.0.1:8000/?job=74d7a1685b704d529354005a2c8608fb) · [本地交互报告](../experiments/segmentation_20261111/index.html) · [机器可读实测](../experiments/segmentation_20261111/acceptance.json)
+[打开真实任务](http://127.0.0.1:8000/?job=74d7a1685b704d529354005a2c8608fb) · [本地交互报告](../../experiments/segmentation_20261111/index.html) · [机器可读实测](../../experiments/segmentation_20261111/acceptance.json)
 
-![原图、旧新分割及实际 GLB 对照](../experiments/segmentation_20261111/comparison_overview.png)
+![原图、旧新分割及实际 GLB 对照](../../experiments/segmentation_20261111/comparison_overview.png)
 
 ## 固定条件
 
@@ -59,8 +59,8 @@ SAM 内部预测 IoU 0.984375 只是模型自估分数，不是实测 IoU 或准
 SAM 源码固定 `2b90b9f5ceec907a1c18123530e92e794ad901a4`，模型 `facebook/sam2.1-hiera-tiny` 固定 `de431c4043854a71d8101e17995dfe596bf101a5`，156,008,466 字节，Apache-2.0，未使用 CUDA 扩展。独立 `.venv-sam2` 复用现有 CUDA torch，没有修改原 ML 环境。
 
 ```powershell
-node scripts/test_sam2_workflow.mjs
-node scripts/test_sam2_cancel.mjs
+node tests/e2e/test_sam2_workflow.mjs
+node tests/e2e/test_sam2_cancel.mjs
 & 'D:\Blender 5.1\blender.exe' -b --python scripts/render_segmentation_benchmark.py
 .\.venv\Scripts\python.exe scripts/assemble_segmentation_comparison.py
 .\.venv\Scripts\python.exe scripts/report_segmentation_benchmark.py

@@ -8,7 +8,7 @@
 
 自动选区仍需人工修正。本轮八个家具中 7 个得到非空可编辑候选，1 个因多视角不一致而拒绝；这不是 7/8 的语义准确率。柜子、灯芯绒沙发的候选不够准确，其他样本也没有证明完整的背面或真实拆装边界。
 
-可直接试用：[坐垫候选局部换色](http://127.0.0.1:8001/?job=0fe6b672d7b44e4e9b272d178adfc953) · [圆桌拆装与 UV](http://127.0.0.1:8001/?job=e42b38bfca9e4c8b8cc389cc08684a84) · [图像、日志与对照页](../experiments/part_tools_20261112/index.html)。
+可直接试用：[坐垫候选局部换色](http://127.0.0.1:8001/?job=0fe6b672d7b44e4e9b272d178adfc953) · [圆桌拆装与 UV](http://127.0.0.1:8001/?job=e42b38bfca9e4c8b8cc389cc08684a84) · [图像、日志与对照页](../../experiments/part_tools_20261112/index.html)。
 
 ## 1. 点击辅助分割
 
@@ -33,7 +33,7 @@
 
 真实闭环也已验证：扶手椅候选 **67,672 面**保存成“坐垫表面（SAM 候选）”，随后只给这个新部件保存绿色材质；整件模型的三角面总数保持不变，其他部件材质签名不变。见 `sam_save_browser.json`。这仍只是可编辑表面，不是完整可制造坐垫。
 
-![SAM 候选保存后局部换色](../experiments/part_tools_20261112/sam_saved_chair_part.png)
+![SAM 候选保存后局部换色](../../experiments/part_tools_20261112/sam_saved_chair_part.png)
 
 ## 2. 检查与修正分组
 
@@ -51,7 +51,7 @@
 
 看图结论：TripoSR 的颜色接近蓝色，但细金属腿明显变形、缩短，靠背/坐垫纹理有噪声；Hunyuan 灰色几何保留更多细支撑形态，但腿架仍不完整、没有蓝色面料。两者均未通过完整商品外观验收。该功能提供比较和人工选择，没有宣称能自动挑出最真实模型或修复所有细腿。
 
-![TripoSR 实际对照输出](../experiments/part_tools_20261112/chair_triposr_generation_front.png)
+![TripoSR 实际对照输出](../../experiments/part_tools_20261112/chair_triposr_generation_front.png)
 
 ## 4. 曲面贴图与 UV
 
@@ -103,14 +103,14 @@ Python：API/合同 40 项、既有资产回归 9 项、家具分组/修复 12 �
 
 证据目录：`experiments/part_tools_20261112/`。主要记录：`sam_browser.json`、`geometric_baseline.json`、`sam_save_browser.json`、`real_edits.json`、`part_export_resource_checks.json`、`generation_outcomes.json`、`visual_review.json`、`workflow_browser.json`、`external_renders.json` 与各测试日志。SAM 的渲染、掩码、提示和 worker 日志保留在测试任务的 `part_proposals/` 下。
 
-主要实现：`apps/web/src/samPartSelection.ts`、`partInspection.ts`、`ReconstructionCompare.tsx`、`Viewer.tsx`、`AssetEditor.tsx`；`services/api/part_prompt.py`、`app.py`、`models.py`；`scripts/segment_part_views.py`、`part_tools.py`。xatlas 已加入两种本地 3D 环境的依赖清单。本机已安装并运行验证。
+主要实现：`apps/web/src/samPartSelection.ts`、`partInspection.ts`、`ReconstructionCompare.tsx`、`Viewer.tsx`、`AssetEditor.tsx`；`services/api/part_prompt.py`、`app.py`、`models.py`；`services/workers/segment_part_views.py`、`part_tools.py`。xatlas 已加入两种本地 3D 环境的依赖清单。本机已安装并运行验证。
 
 ```powershell
 # 新版地址 http://127.0.0.1:8001
 powershell -ExecutionPolicy Bypass -File .\start.ps1 -Port 8001
 .venv/Scripts/python.exe -m unittest discover -s tests
-.venv-hunyuan/Scripts/python.exe scripts/test_part_tools.py
-node scripts/test_part_inspection.mjs
+.venv-hunyuan/Scripts/python.exe tests/workers/test_part_tools.py
+node tests/js/test_part_inspection.mjs
 ```
 
 旧 8000 服务未停止：自动审批拒绝了停止旧服务的操作，返回 `blocked by policy`。本轮改在 8001 启动并验收新版，后续仅重启本轮自己启动的服务。请使用 8001 查看新功能。

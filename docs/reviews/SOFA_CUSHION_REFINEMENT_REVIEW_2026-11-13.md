@@ -1,6 +1,6 @@
 # 沙发坐垫边界、厚度与真实切分预览验收
 
-日期：2026-11-13。[图片与原始证据](../experiments/sofa_refinement_20261113/index.html)。[工作台](http://127.0.0.1:8001)。
+日期：2026-11-13。[图片与原始证据](../../experiments/sofa_refinement_20261113/index.html)。[工作台](http://127.0.0.1:8001)。
 
 ## 结论
 
@@ -58,7 +58,7 @@
 
 测试过程中有两类脚本问题：首次 Python 测试命令引用了不存在的模块，改用实际模块名后通过；Blender 会把多个材质的三角面合入同一个对象，首次隔离脚本删掉了整个对象，已改为按材质删除对应面。初次日志 geometry_tests_initial.log / render_initial.log 保留，最终数据取修正后的完整运行。单元测试中的 subprocess mock 也曾影响校验子进程，修正测试隔离后 API 全套通过。
 
-主要实现见 [完整部件面板](../apps/web/src/CompletePartPanel.tsx)、[三维切分预览](../apps/web/src/CutPreview.tsx)、[预览服务](../services/api/completion_preview.py)、[实体切分](../scripts/complete_part.py)。预览服务、几何和前端没有引入新的识别模型或密钥依赖。
+主要实现见 [完整部件面板](../../apps/web/src/CompletePartPanel.tsx)、[三维切分预览](../../apps/web/src/CutPreview.tsx)、[预览服务](../../services/api/completion_preview.py)、[实体切分](../../services/workers/complete_part.py)。预览服务、几何和前端没有引入新的识别模型或密钥依赖。
 
 ## 6. 当前边界与后续工作
 
