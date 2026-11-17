@@ -50,7 +50,8 @@ def main():
 
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
-    client = httpx.Client(base_url=args.server, timeout=60)
+    # Local workbench only: ignore HTTP(S)_PROXY, which would otherwise route 127.0.0.1 through a proxy.
+    client = httpx.Client(base_url=args.server, timeout=60, trust_env=False)
     started = time.monotonic()
     timeline = []
 

@@ -88,7 +88,7 @@ npm run build
 
 ```powershell
 $env:PYTHONPATH = "$DST;$DST\services\workers"
-.\.venv-hunyuan\Scripts\python.exe -m unittest tests.workers.test_parametric_parts tests.workers.test_vram_profiles -v
+foreach ($p in 'test_parametric_parts.py','test_vram_profiles.py') { .\.venv-hunyuan\Scripts\python.exe -m unittest discover -s tests\workers -t tests\workers -p $p }
 ```
 
 **预期：** 10 项全部 OK。缺少哪个库就写进报告：`scipy`、`trimesh`、`rtree` 属于小依赖，可以装进 `.venv-hunyuan`；`igl` / `manifold3d` 按 README 安装到 `.tools/geometry_extra`。
