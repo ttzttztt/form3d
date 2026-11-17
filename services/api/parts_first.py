@@ -196,6 +196,9 @@ def _plan_problem(plan):
         return "原图中没有识别出可生成的部件"
     if unknown:
         return f"有 {len(unknown)} 个区域的部件类别互相冲突，请为它们选择类别或去掉后再继续"
+    hard = HARD_KINDS.get(plan.get("object_category"), set())
+    if all(p.get("kind") in hard for p in physical):
+        return None  # built parametrically: the PartCrafter part limit does not apply
     if len(physical) > MAX_PARTS:
         return f"识别出 {len(physical)} 个部件，超过 PartCrafter 单次 {MAX_PARTS} 个部件的上限，请去掉一些"
     return "部件清单证据不足"

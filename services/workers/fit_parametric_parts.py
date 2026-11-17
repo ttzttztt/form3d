@@ -61,9 +61,10 @@ def from_plan(args):
         raise ValueError("Preserve previous assemblies; choose a new output folder")
     plan = AssemblyPlan.model_validate_json((folder / "plan.json").read_text(encoding="utf-8"))
     observations = json.loads((folder / "observations.json").read_text(encoding="utf-8"))
-    if plan.status != "planned":
-        raise ValueError("Unresolved image inventory cannot be built")
     physical = [p for p in plan.parts if p.geometry_role == "physical_part"]
+    # "needs_evidence" may only mean "more than PartCrafter's 16 parts", which does not matter here.
+    if not physical or any(p.kind in ("unknown", "other") for p in physical):
+        raise ValueError("Unresolved image inventory cannot be built")
     soft = [p.kind for p in physical if not is_hard(plan.object_category, p.kind)]
     if soft:
         raise ValueError("Parametric build needs every part to be a hard part; soft parts: " + ", ".join(soft))

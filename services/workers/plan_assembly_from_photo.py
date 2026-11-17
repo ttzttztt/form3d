@@ -141,10 +141,21 @@ def run(args):
                     - 0.15 * np.linalg.norm((np.array(r["box"][:2]) + r["box"][2:]) / 2 - center) / max(product.size)
                 ),
             )
-            masks, scores, _ = predictor.predict(box=np.asarray(chosen["box"], np.float32), multimask_output=False)
-            if float(scores[0]) < 0.65:
+            # SAM's single default for a whole-furniture box is often only its largest sub-part
+            # (the tabletop, the cushions). Take the largest of the multimask proposals that is
+            # confident and stays inside the box, so parts are not judged "outside the furniture".
+            box = np.asarray(chosen["box"], np.float32)
+            masks, scores, _ = predictor.predict(box=box, multimask_output=True)
+            x0, y0, x1, y1 = [int(round(v)) for v in box]
+            whole_options = []
+            for mask, score in zip(masks, scores):
+                mask = np.asarray(mask) > 0
+                inside = mask[y0:y1, x0:x1].sum() / max(mask.sum(), 1)
+                if float(score) >= 0.6 and inside >= 0.9:
+                    whole_options.append((int(mask.sum()), float(score), mask))
+            if not whole_options:
                 raise ValueError("Whole furniture mask is uncertain")
-            whole_mask = np.asarray(masks[0]) > 0
+            whole_mask = max(whole_options, key=lambda r: r[0])[2]
             whole_method = "local_furniture_detection_and_sam"
         if whole_mask.sum() < 300:
             raise ValueError("Whole furniture mask is too small")
@@ -200,9 +211,15 @@ def run(args):
                     box=box, point_coords=points, point_labels=labels, multimask_output=True
                 )
                 all_masks.extend(zip(masks, scores))
+            filters = {}  # which check removed each SAM candidate, for diagnosis
+
+            def drop(reason):
+                filters[reason] = filters.get(reason, 0) + 1
+
             for mask, score in all_masks:
                 mask = np.asarray(mask) > 0
-                if float(score) < 0.68 or mask.sum() < 150:
+                if float(score) < 0.6 or mask.sum() < 150:
+                    drop("low_sam_score_or_tiny")
                     continue
                 containment = float((mask & whole_mask).sum() / max(mask.sum(), 1))
                 fraction = float((mask & whole_mask).sum() / max(whole_mask.sum(), 1))
@@ -217,7 +234,18 @@ def run(args):
                     if item["kind"] == "armrest"
                     else 0.65
                 )
-                if containment < 0.88 or inside_box < 0.85 or fraction > limit:
+                if item["kind"] == "tabletop":
+                    limit = 0.85  # a top can cover most of a table seen from above
+                # Loosened from 0.88/0.85: SAM masks of real parts often spill a little past the
+                # detector box (round tops, cushions), which dropped many true parts.
+                if containment < 0.8:
+                    drop("outside_furniture_mask")
+                    continue
+                if inside_box < 0.75:
+                    drop("spills_out_of_detector_box")
+                    continue
+                if fraction > limit:
+                    drop("too_large_for_kind")
                     continue
                 mask &= whole_mask
                 _, _, components, _ = cv2.connectedComponentsWithStats(mask.astype("uint8"), 8)
@@ -225,6 +253,7 @@ def run(args):
                     float(components[1:, cv2.CC_STAT_AREA].max() / max(mask.sum(), 1)) if len(components) > 1 else 0.0
                 )
                 if item["kind"] in ("back_cushion", "seat_cushion", "bolster") and dominant < 0.9:
+                    drop("fragmented")
                     continue
                 if item["kind"] == "bolster":
                     yy, xx = np.nonzero(mask)
@@ -232,10 +261,11 @@ def run(args):
                     eigen = np.linalg.eigvalsh(cov)
                     elongation = float(np.sqrt(eigen[1] / max(eigen[0], 1e-6)))
                     if elongation < 1.7:
+                        drop("not_elongated")
                         continue
                 candidates.append((float(score), mask))
             if not candidates:
-                rejected.append({**item, "reason": "no_contained_single_part_mask"})
+                rejected.append({**item, "reason": "no_contained_single_part_mask", "filters": filters})
                 continue
             score, mask = max(candidates, key=lambda r: r[0])
             duplicates = [p for p in accepted if (mask & p["mask"]).sum() / max((mask | p["mask"]).sum(), 1) > 0.75]
@@ -276,6 +306,11 @@ def run(args):
                     "query": item["query"],
                 }
             )
+    from part_kind_rules import resolve_kind
+
+    for item in accepted:
+        if item.get("kind_evidence"):
+            item["kind"], item["kind_resolution"] = resolve_kind(item["kind_evidence"], item["mask"], whole_mask)
     foreground = product.convert("RGBA")
     foreground.putalpha(Image.fromarray(whole_mask.astype("uint8") * 255))
     foreground.save(folder / "generation_input.png")
