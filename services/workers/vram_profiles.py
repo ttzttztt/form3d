@@ -28,9 +28,10 @@ def choose(total_bytes, num_parts):
         name = "standard"
     elif gib >= 10:
         name = "standard" if num_parts <= 6 else "reduced"
-    elif gib >= 7:
-        name = "reduced" if num_parts <= 4 else "low"
-    else:  # 6 GB class cards such as an RTX 3060 Laptop / 2060
+    elif gib >= 5.5:
+        # Measured on an RTX 3060 Laptop 6 GB: 5 parts at "standard" peaked at 4.06 GiB (192 s).
+        name = "standard" if num_parts <= 6 else "reduced" if num_parts <= 10 else "low"
+    else:
         name = "low" if num_parts <= 4 else "minimal"
     return profile(name)
 

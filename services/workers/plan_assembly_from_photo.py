@@ -112,10 +112,14 @@ def run(args):
     model = processor = None  # release GPU memory; detect() is not called after this
     gc.collect()
     torch.cuda.empty_cache()
+    # Large separates textured cushions far better than Tiny; PLANNER_SAM=tiny forces the small one.
+    large = ROOT / ".models/sam2.1-hiera-large/sam2.1_hiera_large.pt"
+    use_large = large.is_file() and os.getenv("PLANNER_SAM", "auto") != "tiny"
+    segmenter = "SAM 2.1 Hiera Large" if use_large else "SAM 2.1 Hiera Tiny"
     predictor = SAM2ImagePredictor(
         build_sam2(
-            "configs/sam2.1/sam2.1_hiera_t.yaml",
-            str(ROOT / ".models/sam2.1-hiera-tiny/sam2.1_hiera_tiny.pt"),
+            "configs/sam2.1/sam2.1_hiera_l.yaml" if use_large else "configs/sam2.1/sam2.1_hiera_t.yaml",
+            str(large if use_large else ROOT / ".models/sam2.1-hiera-tiny/sam2.1_hiera_tiny.pt"),
             device=device,
             apply_postprocessing=False,
         ),
@@ -357,7 +361,7 @@ def run(args):
         folder / "observations.json",
         {
             "detector": "Grounding DINO Tiny",
-            "segmenter": "SAM 2.1 Hiera Tiny",
+            "segmenter": segmenter,
             "planning_phase": "before_3d_generation",
             "input_sha256": source_sha,
             "source_crop_pixels": bounds,

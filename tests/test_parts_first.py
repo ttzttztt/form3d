@@ -56,10 +56,12 @@ class FakeWorkers:
         linked=True,
         block=None,
         oom_profiles=(),
+        decode_failures=0,
     ):
         self.store, self.kinds, self.category = store, kinds, category
         self.geometry_gate, self.linked, self.block = geometry_gate, linked, block
         self.oom_profiles = list(oom_profiles)  # profiles that run out of memory, in call order
+        self.decode_failures = decode_failures
         self.calls, self.commands = [], []
         self.stopped = threading.Event()
 
@@ -84,6 +86,11 @@ class FakeWorkers:
                 self.stopped.set()
         if name == "plan":
             self.write_plan(root / "plan", command)
+        elif name == "generate" and self.decode_failures:
+            self.decode_failures -= 1
+            facts = {"status": "failed", "error": "Some native part slots failed to decode", "vram_profile": {"name": "low"}}
+            (root / "raw" / "generation.json").write_text(json.dumps(facts), encoding="utf-8")
+            raise ValueError("部件优先流程「generate」阶段失败：Some native part slots failed to decode")
         elif name == "generate" and self.oom_profiles:
             requested = command[command.index("--vram-profile") + 1]
             used = self.oom_profiles.pop(0) if requested == "auto" else requested
@@ -297,6 +304,15 @@ class PartsFirstTests(unittest.TestCase):
         self.assertEqual(fixed.status_code, 200, fixed.text)
         self.assertEqual(self.wait(job)["status"], "awaiting_review")
 
+    def test_plan_missing_the_defining_part_is_not_built(self):
+        workers = FakeWorkers(self.store, kinds=("leg", "leg"))
+        job = self.wait(self.start(workers))
+        self.assertEqual(job["status"], "awaiting_plan_review")
+        self.assertIn("桌面", job["parts_plan"]["problem"])
+        refused = self.client.post(f"/api/jobs/{job['id']}/parts-plan/confirm", json={})
+        self.assertEqual(refused.status_code, 409)
+        self.assertEqual(workers.calls, ["plan"])
+
     def test_unresolved_plan_without_review_stops_before_generation(self):
         workers = FakeWorkers(self.store, kinds=("tabletop", "unknown"))
         job = self.wait(self.start(workers, parts_plan_review=False))
@@ -399,6 +415,19 @@ class PartsFirstTests(unittest.TestCase):
         self.assertIn("parts_vram_retry", [e["stage"] for e in job["events"]])
         folder = self.store.root / "jobs" / job["id"] / "parts_first"
         self.assertEqual(len(list(folder.glob("raw_oom_low_*"))), 1)  # the failed attempt is kept
+
+    def test_decode_failure_retries_once_with_another_seed(self):
+        workers = FakeWorkers(self.store, decode_failures=1)
+        job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
+        self.assertEqual(job["status"], "awaiting_review", job.get("error"))
+        generate = [c for c, n in zip(workers.commands, workers.calls) if n == "generate"]
+        self.assertEqual(len(generate), 2)
+        self.assertNotIn("--seed", generate[0])
+        self.assertEqual(generate[1][generate[1].index("--seed") + 1], "43")
+        self.assertEqual(generate[1][generate[1].index("--vram-profile") + 1], "low")  # same profile
+        workers = FakeWorkers(self.store, decode_failures=2)
+        job = self.wait(self.start(workers, parts_plan_review=False, parts_parametric=False))
+        self.assertEqual(job["status"], "failed")  # only one retry
 
     def test_out_of_memory_at_smallest_profile_explains_what_to_do(self):
         workers = FakeWorkers(self.store, oom_profiles=["minimal"])

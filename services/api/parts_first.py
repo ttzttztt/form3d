@@ -70,7 +70,16 @@ HARD_KINDS = {
     "chair": {"leg"},
     "sofa": {"leg"},
 }
-VRAM_PROFILES = ["standard", "reduced", "low", "minimal"]  # services/workers/vram_profiles.py
+VRAM_PROFILES = ["standard", "reduced", "low", "minimal"]
+
+# A plan without any of these kinds is missing the part that defines the furniture
+# (e.g. a "table" of one leg) and must not be built as if it were complete.
+REQUIRED_KINDS = {
+    "table": ({"tabletop"}, "桌面"),
+    "chair": ({"seat_cushion", "backrest", "body"}, "坐面或靠背"),
+    "sofa": ({"seat_cushion", "back_cushion", "body", "frame"}, "坐垫、靠垫或沙发主体"),
+    "cabinet": ({"door", "drawer", "shelf", "body", "frame", "panel"}, "柜门、抽屉、层板或柜体"),
+}  # services/workers/vram_profiles.py
 
 
 def parts_python():
@@ -190,6 +199,10 @@ def _plan_problem(plan):
     """None when the plan can be generated, otherwise a user-facing reason."""
     physical = _physical(plan)
     unknown = [p for p in physical if p.get("kind") == "unknown"]
+    kinds = {p.get("kind") for p in physical}
+    needed = REQUIRED_KINDS.get(plan.get("object_category"))
+    if physical and not unknown and needed and not kinds & needed[0]:
+        return f"没有识别出{needed[1]}，部件清单不完整；请换一张更清晰的图，或调整框选范围"
     if plan.get("status") == "planned" and physical and len(physical) <= MAX_PARTS:
         return None
     if not physical:
@@ -400,13 +413,14 @@ def _plan(store, job_id, request, image, runner, check_cancelled, plan_folder):
 def _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command, raw_folder):
     """Start with the profile PartCrafter picks for this card; on out-of-memory retry smaller, in a fresh process."""
     requested = "auto"
+    seed_args = []  # default seed first; one reseeded retry after a decode failure
     while True:
         try:
             _with_gpu(
                 check_cancelled,
                 lambda: runner.run(
                     "generate",
-                    command + ["--vram-profile", requested],
+                    command + ["--vram-profile", requested] + seed_args,
                     raw_folder / "progress.json",
                     PARTCRAFTER_STAGES,
                 ),
@@ -414,6 +428,14 @@ def _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command
         except ValueError:
             facts = _read_json(raw_folder / "generation.json") or {}
             used = (facts.get("vram_profile") or {}).get("name")
+            # Measured on a 6 GB card: thin parts (chair legs) sometimes decode to nothing at any
+            # profile, and a different seed usually fixes it. Retry once at the same profile.
+            if not facts.get("out_of_memory") and "failed to decode" in (facts.get("error") or "") and not seed_args:
+                raw_folder.rename(raw_folder.with_name(f"raw_decode_failed_{int(time.time() * 1000)}"))
+                seed_args = ["--seed", "43"]
+                requested = used if used in VRAM_PROFILES else requested
+                store.event(job_id, "parts_decode_retry", "部分部件网格解码失败，换一个随机种子重试一次")
+                continue
             if not facts.get("out_of_memory") or used not in VRAM_PROFILES or used == VRAM_PROFILES[-1]:
                 if facts.get("out_of_memory"):
                     raise ValueError(

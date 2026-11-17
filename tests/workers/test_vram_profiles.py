@@ -5,8 +5,10 @@ from vram_profiles import GIB, NAMES, choose, lower
 
 class VramProfileTests(unittest.TestCase):
     def test_small_cards_start_low_and_scale_with_part_count(self):
-        self.assertEqual(choose(6 * GIB, 3)["name"], "low")
-        self.assertEqual(choose(6 * GIB, 8)["name"], "minimal")
+        self.assertEqual(choose(6 * GIB, 5)["name"], "standard")  # measured: 4.06 GiB peak
+        self.assertEqual(choose(6 * GIB, 8)["name"], "reduced")
+        self.assertEqual(choose(6 * GIB, 14)["name"], "low")
+        self.assertEqual(choose(4 * GIB, 8)["name"], "minimal")
         self.assertEqual(choose(12 * GIB, 4)["name"], "standard")
         self.assertEqual(choose(12 * GIB, 12)["name"], "reduced")
         self.assertEqual(choose(24 * GIB, 16)["name"], "standard")
