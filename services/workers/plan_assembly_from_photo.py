@@ -446,6 +446,7 @@ def run(args):
     foreground.putalpha(Image.fromarray(whole_mask.astype("uint8") * 255))
     foreground.save(folder / "generation_input.png")
     Image.fromarray(whole_mask.astype("uint8") * 255).save(folder / "whole_mask.png")
+    accepted = [item for item in accepted if item["mask"].any()]  # clipping to the whole mask can empty a part
     records = []
     overlay = np.asarray(product).copy()
     palette = [(233, 167, 49), (51, 128, 199), (156, 94, 191), (36, 170, 148), (225, 95, 116), (122, 154, 51)]
