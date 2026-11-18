@@ -196,7 +196,9 @@ def clean_visible_hint(mask):
     return core, retained
 
 
-def fit_camera(meshes, product_mask):
+def fit_camera(meshes, product_mask, front_hemisphere=False):
+    """front_hemisphere: only azimuths within 90 degrees of +Z (generated meshes face +Z, and a
+    silhouette alone cannot tell a box's front from its back)."""
     full = trimesh.util.concatenate(list(meshes.values()))
     center = full.bounds.mean(0)
     radius = float(full.extents.max())
@@ -211,6 +213,9 @@ def fit_camera(meshes, product_mask):
 
     def evaluate(az, el, fov):
         nonlocal best, evaluations
+        az = (az + np.pi) % (2 * np.pi) - np.pi
+        if front_hemisphere and abs(az) > np.pi / 2:
+            return None
         base = camera_matrix(center, radius, az, el, fov)
         rendered = paint(meshes, base)
         rb = bbox(rendered)
@@ -257,7 +262,10 @@ def associate(meshes, camera, references, folder, target_group, projected_labels
     labels = paint(meshes, matrix, size, labels=True) if projected_labels is None else projected_labels
     target, retained = clean_visible_hint(labels == list(meshes).index(target_group) + 1)
     if not target.any():
-        return {"status": "needs_confirmation", "reason": "所选部件在原图视角不可见，不能自动对应参考"}, target
+        return {
+            "status": "needs_confirmation",
+            "reason": "所选部件在原图视角不可见，不能自动对应参考",
+        }, target
     rows = []
     for ref in references["candidates"]:
         if "source_crop_in_product_pixels" not in ref:

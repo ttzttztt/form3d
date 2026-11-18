@@ -60,7 +60,18 @@ PARTCRAFTER_STAGES = {
     "raw_candidates_ready": "原始部件已生成",
 }
 
-TIMEOUTS = {"plan": 900, "generate": 3600, "audit": 1800, "export": 1800, "parametric": 600}
+TIMEOUTS = {
+    "plan": 900,
+    "generate": 3600,
+    "audit": 1800,
+    "export": 1800,
+    "parametric": 600,
+    "shape": 1800,
+    "regions": 900,
+    "segment": 900,
+    "complete": 7200,
+    "assemble": 900,
+}
 
 # Must match services/workers/parametric_parts.HARD_KINDS (kept here so the API process does not
 # import worker code): these kinds are built or replaced as parametric boxes/cylinders.
@@ -70,7 +81,16 @@ HARD_KINDS = {
     "chair": {"leg"},
     "sofa": {"leg"},
 }
-VRAM_PROFILES = ["standard", "reduced", "low", "minimal"]  # services/workers/vram_profiles.py
+VRAM_PROFILES = ["standard", "reduced", "low", "minimal"]
+
+# A plan without any of these kinds is missing the part that defines the furniture
+# (e.g. a "table" of one leg) and must not be built as if it were complete.
+REQUIRED_KINDS = {
+    "table": ({"tabletop"}, "桌面"),
+    "chair": ({"seat_cushion", "backrest", "body"}, "坐面或靠背"),
+    "sofa": ({"seat_cushion", "back_cushion", "body", "frame"}, "坐垫、靠垫或沙发主体"),
+    "cabinet": ({"door", "drawer", "shelf", "body", "frame", "panel"}, "柜门、抽屉、层板或柜体"),
+}  # services/workers/vram_profiles.py
 
 
 def parts_python():
@@ -81,6 +101,31 @@ def parts_python():
         else ROOT / ".venv-parts" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     )
     return str(candidate.resolve()) if candidate.is_file() else None
+
+
+def holo_python():
+    configured = os.getenv("HOLO_PYTHON")
+    candidate = (
+        Path(configured)
+        if configured
+        else ROOT / ".venv-holo" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    )
+    return str(candidate.resolve()) if candidate.is_file() else None
+
+
+def shape_first_ready():
+    """Whole-shape generation + photo split + HoloPart: the default route when installed.
+
+    IMG3D_SHAPE_FIRST=0 switches back to the parametric / PartCrafter routes.
+    """
+    return (
+        os.getenv("IMG3D_SHAPE_FIRST", "1") == "1"
+        and bool(local_python("hunyuan-mini"))
+        and bool(holo_python())
+        and bool(segmentation_python())
+        and (ROOT / ".models" / "hunyuan3d-2mini").is_dir()
+        and (ROOT / ".models" / "holopart" / "model_index.json").is_file()
+    )
 
 
 def parts_first_status():
@@ -105,6 +150,7 @@ def parts_first_status():
         # Furniture made only of hard parts needs no generator: plan + parametric build.
         "available": all(checks[name] for name in planner + geometry),
         "generator_available": all(checks[name] for name in generator),
+        "shape_first_available": shape_first_ready(),
         "checks": checks,
         "missing": [name for name, ok in checks.items() if not ok],
         "planner": "Grounding DINO Tiny + SAM 2.1 Hiera Tiny",
@@ -190,12 +236,19 @@ def _plan_problem(plan):
     """None when the plan can be generated, otherwise a user-facing reason."""
     physical = _physical(plan)
     unknown = [p for p in physical if p.get("kind") == "unknown"]
+    kinds = {p.get("kind") for p in physical}
+    needed = REQUIRED_KINDS.get(plan.get("object_category"))
+    if physical and not unknown and needed and not kinds & needed[0]:
+        return f"没有识别出{needed[1]}，部件清单不完整；请换一张更清晰的图，或调整框选范围"
     if plan.get("status") == "planned" and physical and len(physical) <= MAX_PARTS:
         return None
     if not physical:
         return "原图中没有识别出可生成的部件"
     if unknown:
         return f"有 {len(unknown)} 个区域的部件类别互相冲突，请为它们选择类别或去掉后再继续"
+    hard = HARD_KINDS.get(plan.get("object_category"), set())
+    if all(p.get("kind") in hard for p in physical):
+        return None  # built parametrically: the PartCrafter part limit does not apply
     if len(physical) > MAX_PARTS:
         return f"识别出 {len(physical)} 个部件，超过 PartCrafter 单次 {MAX_PARTS} 个部件的上限，请去掉一些"
     return "部件清单证据不足"
@@ -330,6 +383,8 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
             parts_plan=summary,
             parts_overlay_url=f"/api/jobs/{job_id}/files/parts_overlay.png",
         )
+    if shape_first_ready():
+        return _build_shape_first(store, job_id, runner, check_cancelled, root, image)
     plan = _read_json(plan_folder / "plan.json") or {}
     kinds = [p["kind"] for p in _physical(plan)]
     hard = HARD_KINDS.get(plan.get("object_category"), set())
@@ -344,6 +399,124 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
             + "、".join(status["missing"])
         )
     return _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root, request.parts_parametric)
+
+
+def _build_shape_first(store, job_id, runner, check_cancelled, root, image):
+    """Generate the whole shape, split it by the photo's regions, complete each part as a solid.
+
+    Category-independent: no furniture rules decide the parts. Hidden geometry is generated and
+    marked as inferred; parts whose completion strays from the observed surface are thickened
+    surfaces flagged for review (assemble_shape_parts.py).
+    """
+    folder, plan = root / "shape_first", root / "plan"
+    if folder.exists():
+        folder.rename(folder.with_name(f"shape_first_superseded_{int(time.time() * 1000)}"))
+    folder.mkdir(parents=True)
+    hunyuan = local_python("hunyuan-mini")
+    store.event(job_id, "parts_shape", "整体生成：Hunyuan3D-2mini 从原图生成完整形状")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "shape",
+            [
+                hunyuan,
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "generate_hunyuan3d.py",
+                "--input",
+                plan / "generation_input.png",
+                "--output",
+                folder / "shape",
+                "--steps",
+                "30",
+                "--resolution",
+                "256",
+                "--keep-background",
+            ],
+            progress_path=folder / "shape" / "local_progress.json",
+        ),
+    )
+    store.event(job_id, "parts_regions", "在原图中按区域分割部件（SAM 2，不依赖品类规则）")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "regions",
+            [
+                segmentation_python(),
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "photo_regions.py",
+                "--plan",
+                plan,
+                "--output",
+                folder / "regions",
+            ],
+        ),
+    )
+    store.event(job_id, "parts_segment", "把原图分区对齐并投影到整体形状上")
+    runner.run(
+        "segment",
+        [
+            hunyuan,
+            "-X",
+            "utf8",
+            "-u",
+            WORKERS / "segment_shape_by_photo.py",
+            "--mesh",
+            folder / "shape" / "model.glb",
+            "--plan",
+            plan,
+            "--regions",
+            folder / "regions",
+            "--output",
+            folder / "segment",
+        ],
+    )
+    store.event(job_id, "parts_complete", "用 HoloPart 把每个部件补全为实体（隐藏部分为生成）")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "complete",
+            [
+                holo_python(),
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "complete_parts_holopart.py",
+                "--input",
+                folder / "segment" / "segmented.glb",
+                "--output",
+                folder / "complete",
+            ],
+        ),
+    )
+    runner.run(
+        "assemble",
+        [
+            hunyuan,
+            "-X",
+            "utf8",
+            "-u",
+            WORKERS / "assemble_shape_parts.py",
+            "--plan",
+            plan,
+            "--image",
+            store.root / image["normalized_path"],
+            "--regions",
+            folder / "regions",
+            "--segmentation",
+            folder / "segment",
+            "--completion",
+            folder / "complete",
+            "--output",
+            folder / "assembly",
+        ],
+    )
+    return attach_assembly_candidate(
+        store, job_id, folder / "assembly", None, route="parts_first", pending_status="running"
+    )
 
 
 def _build_parametric(store, job_id, directory, runner, root):
@@ -397,13 +570,14 @@ def _plan(store, job_id, request, image, runner, check_cancelled, plan_folder):
 def _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command, raw_folder):
     """Start with the profile PartCrafter picks for this card; on out-of-memory retry smaller, in a fresh process."""
     requested = "auto"
+    seed_args = []  # default seed first; one reseeded retry after a decode failure
     while True:
         try:
             _with_gpu(
                 check_cancelled,
                 lambda: runner.run(
                     "generate",
-                    command + ["--vram-profile", requested],
+                    command + ["--vram-profile", requested] + seed_args,
                     raw_folder / "progress.json",
                     PARTCRAFTER_STAGES,
                 ),
@@ -411,6 +585,14 @@ def _generate_with_vram_fallback(store, job_id, runner, check_cancelled, command
         except ValueError:
             facts = _read_json(raw_folder / "generation.json") or {}
             used = (facts.get("vram_profile") or {}).get("name")
+            # Measured on a 6 GB card: thin parts (chair legs) sometimes decode to nothing at any
+            # profile, and a different seed usually fixes it. Retry once at the same profile.
+            if not facts.get("out_of_memory") and "failed to decode" in (facts.get("error") or "") and not seed_args:
+                raw_folder.rename(raw_folder.with_name(f"raw_decode_failed_{int(time.time() * 1000)}"))
+                seed_args = ["--seed", "43"]
+                requested = used if used in VRAM_PROFILES else requested
+                store.event(job_id, "parts_decode_retry", "部分部件网格解码失败，换一个随机种子重试一次")
+                continue
             if not facts.get("out_of_memory") or used not in VRAM_PROFILES or used == VRAM_PROFILES[-1]:
                 if facts.get("out_of_memory"):
                     raise ValueError(

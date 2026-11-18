@@ -119,6 +119,7 @@ npm run format
 ## 文档
 
 - [路线决策](docs/ROUTE_DECISION.md)：模型核实、为什么改路线、下一步
+- [本机验证执行手册](docs/LOCAL_VERIFICATION_RUNBOOK.md)：交给本地 AI 逐步执行的验证与显存校准流程
 - [目标与验收约定](docs/GOAL-parts-first.md)
 - [项目目录](docs/PROJECT_STRUCTURE.md)
 - [技术设计](docs/TECHNICAL_SPEC.md) · [项目方案](docs/PROJECT_PLAN.md) · [模型选型记录](docs/MODEL_SELECTION.md)

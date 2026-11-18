@@ -49,39 +49,37 @@ def add_primitive(doc, binary, mesh):
     }
 
 
-def from_plan(args):
+def write_assembly(
+    output,
+    plan,
+    physical,
+    meshes,
+    *,
+    generator,
+    root_name,
+    group_kind,
+    note,
+    source_engine,
+    sources,
+    fit,
+    method,
+    assumptions,
+    notes=None,
+):
+    """Write model.glb, plan.json and assembly.json in the format attach_assembly_candidate checks.
+
+    meshes: {part_id: {vertices, normals, uvs, faces}} for every physical part.
+    """
     import numpy as np
-    from PIL import Image
-    from parametric_parts import is_hard, layout_from_masks
     from services.api.assembly_models import AssemblyPlan
     from services.api.glb_document import write_glb
 
-    folder, output = Path(args.plan), Path(args.output)
-    if output.exists():
-        raise ValueError("Preserve previous assemblies; choose a new output folder")
-    plan = AssemblyPlan.model_validate_json((folder / "plan.json").read_text(encoding="utf-8"))
-    observations = json.loads((folder / "observations.json").read_text(encoding="utf-8"))
-    if plan.status != "planned":
-        raise ValueError("Unresolved image inventory cannot be built")
-    physical = [p for p in plan.parts if p.geometry_role == "physical_part"]
-    soft = [p.kind for p in physical if not is_hard(plan.object_category, p.kind)]
-    if soft:
-        raise ValueError("Parametric build needs every part to be a hard part; soft parts: " + ", ".join(soft))
-    rows = {row["mask_sha256"]: row for row in observations["parts"]}
-    load = lambda name: np.asarray(Image.open(folder / name).convert("L")) > 127  # noqa: E731
-    inputs = []
-    for part in physical:
-        row = rows[part.observations[0].mask_sha256]
-        if digest(folder / row["mask_file"]) != row["mask_sha256"]:
-            raise ValueError("A part mask changed after planning")
-        inputs.append({"id": part.id, "kind": part.kind, "mask": load(row["mask_file"])})
-    meshes, assumptions, parameters = layout_from_masks(plan.object_category, inputs, load("whole_mask.png"))
-
+    notes = notes or {}
     doc = {
-        "asset": {"version": "2.0", "generator": "img_to3D parametric parts"},
+        "asset": {"version": "2.0", "generator": generator},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
-        "nodes": [{"name": "家具装配（参数化，需检查）", "children": [], "extras": {"assembly_plan_id": plan.id}}],
+        "nodes": [{"name": root_name, "children": [], "extras": {"assembly_plan_id": plan.id}}],
         "meshes": [],
         "materials": [],
         "buffers": [{"byteLength": 0}],
@@ -110,9 +108,9 @@ def from_plan(args):
             "form_logical_group_id": part.id,
             "form_part_name": part.name,
             "form_semantic_kind": part.kind,
-            "form_group_kind": "parametric_part",
+            "form_group_kind": group_kind,
             "form_proposal_status": "needs_review",
-            "form_completion_note": "按原图掩码与品类先验拟合的参数化构件；深度与隐藏结构未验证",
+            "form_completion_note": notes.get(part.id, note),
         }
         doc["nodes"][nodes[part.id]]["mesh"] = len(doc["meshes"])
         doc["meshes"].append({"name": part.name, "primitives": [primitive]})
@@ -126,7 +124,7 @@ def from_plan(args):
         doc["nodes"][parent].setdefault("children", []).append(nodes[part.id])
         if part.geometry_role == "structural_group":
             part.status = "ready"
-    output.mkdir(parents=True)
+    output.mkdir(parents=True, exist_ok=True)
     write_glb(output / "model.glb", doc, binary)
     model_sha = digest(output / "model.glb")
     for part in physical:
@@ -142,24 +140,95 @@ def from_plan(args):
         output / "assembly.json",
         {
             "status": "candidate_ready_for_review",
-            "source_engine": "parametric_from_masks",
-            "source_plan_sha256": digest(folder / "plan.json"),
-            "source_observations_sha256": digest(folder / "observations.json"),
+            "source_engine": source_engine,
+            **sources,
             "model_sha256": model_sha,
             "part_ids": [p.id for p in physical],
-            "parametric_fit": {
-                "mode": "from_masks",
-                "assumptions": assumptions,
-                "parts": [{"part_id": pid, **value} for pid, value in parameters.items()],
-            },
+            **fit,
             "contacts": [],
-            "placement_hypotheses": [{"method": "mask_layout_with_depth_prior", "assumptions": assumptions}],
+            "placement_hypotheses": [{"method": method, "assumptions": assumptions}],
             "materials": "independent_neutral_diagnostic_materials_not_recovered_textures",
             "semantic_assignment_verified": False,
             "physical_structure_verified": False,
             "appearance_accepted": False,
             "complete_assembly_accepted": False,
         },
+    )
+
+
+def from_plan(args):
+    import numpy as np
+    from PIL import Image
+    from parametric_parts import is_hard, layout_from_masks
+    from services.api.assembly_models import AssemblyPlan
+    from services.api.glb_document import write_glb
+
+    folder, output = Path(args.plan), Path(args.output)
+    if output.exists():
+        raise ValueError("Preserve previous assemblies; choose a new output folder")
+    plan = AssemblyPlan.model_validate_json((folder / "plan.json").read_text(encoding="utf-8"))
+    observations = json.loads((folder / "observations.json").read_text(encoding="utf-8"))
+    physical = [p for p in plan.parts if p.geometry_role == "physical_part"]
+    # "needs_evidence" may only mean "more than PartCrafter's 16 parts", which does not matter here.
+    if not physical or any(p.kind in ("unknown", "other") for p in physical):
+        raise ValueError("Unresolved image inventory cannot be built")
+    soft = [p.kind for p in physical if not is_hard(plan.object_category, p.kind)]
+    if soft:
+        raise ValueError("Parametric build needs every part to be a hard part; soft parts: " + ", ".join(soft))
+    rows = {row["mask_sha256"]: row for row in observations["parts"]}
+    load = lambda name: np.asarray(Image.open(folder / name).convert("L")) > 127  # noqa: E731
+    inputs = []
+    for part in physical:
+        row = rows[part.observations[0].mask_sha256]
+        if digest(folder / row["mask_file"]) != row["mask_sha256"]:
+            raise ValueError("A part mask changed after planning")
+        inputs.append({"id": part.id, "kind": part.kind, "mask": load(row["mask_file"]), "row": row})
+    cabinet = folder / "cabinet_geometry.json"
+    cabinet = json.loads(cabinet.read_text(encoding="utf-8")) if cabinet.is_file() else {}
+    method = "mask_layout_with_depth_prior"
+    if "geometry" in cabinet and all(item["row"].get("layout_part_id") for item in inputs):
+        # Measured perspective and front layout (cabinet_geometry.py); the plan may have been edited,
+        # so only parts still in the plan are built, each from its own layout record.
+        from cabinet_geometry import build
+
+        built, assumptions = build(cabinet["geometry"], cabinet["cells"])
+        by_id = {p["id"]: p for p in built}
+        meshes = {item["id"]: by_id[item["row"]["layout_part_id"]]["mesh"] for item in inputs}
+        parameters = {
+            item["id"]: {
+                "layout_part_id": item["row"]["layout_part_id"],
+                "hidden_structure_inferred": by_id[item["row"]["layout_part_id"]]["inferred"],
+            }
+            for item in inputs
+        }
+        assumptions = assumptions + [f"模型轮廓与照片轮廓重合度 {cabinet['reprojection_iou']:.2f}"]
+        method = "two_point_perspective_front_layout"
+    else:
+        meshes, assumptions, parameters = layout_from_masks(plan.object_category, inputs, load("whole_mask.png"))
+
+    write_assembly(
+        output,
+        plan,
+        physical,
+        meshes,
+        generator="img_to3D parametric parts",
+        root_name="家具装配（参数化，需检查）",
+        group_kind="parametric_part",
+        note="按原图掩码与品类先验拟合的参数化构件；深度与隐藏结构未验证",
+        source_engine="parametric_from_masks",
+        sources={
+            "source_plan_sha256": digest(folder / "plan.json"),
+            "source_observations_sha256": digest(folder / "observations.json"),
+        },
+        fit={
+            "parametric_fit": {
+                "mode": "from_masks",
+                "assumptions": assumptions,
+                "parts": [{"part_id": pid, **value} for pid, value in parameters.items()],
+            }
+        },
+        method=method,
+        assumptions=assumptions,
     )
     print("PARAMETRIC_ASSEMBLY_BUILT", len(physical), flush=True)
 
