@@ -1,6 +1,6 @@
 """Complete each surface part of a segmented mesh into a closed solid with local HoloPart.
 
-    complete_parts_holopart.py --input segmented.glb --output OUT [--steps 25] [--seed 42]
+    complete_parts_holopart.py --input segmented.glb --output OUT [--steps 10] [--seed 42]
 
 Input: a GLB scene with one mesh per part (segment_shape_by_photo.py). Each part is completed in the
 context of the whole object (HoloPart's whole-surface condition), so hidden faces are filled in by the
@@ -92,10 +92,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--steps", type=int, default=25)
+    parser.add_argument("--steps", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--octree-depth", type=int, default=8)
+    parser.add_argument("--octree-depth", type=int, default=7)
+    parser.add_argument("--refine-depth", type=int, help="hierarchical refinement depth (default: octree depth + 1)")
+    parser.add_argument("--parts", help="comma-separated part names to complete (default: all)")
     args = parser.parse_args()
+    from scipy.spatial import cKDTree
     import torch
     import trimesh
 
@@ -110,7 +113,12 @@ def main():
     pipe = HoloPartPipeline.from_pretrained(str(WEIGHTS)).to("cuda", torch.float16)
     names, batch = conditions(scene, "cuda")
     result, report = trimesh.Scene(), []
+    wanted = set(args.parts.split(",")) if args.parts else set(names)
+    diagonal = float(np.linalg.norm(scene.extents))
     for i, name in enumerate(names):
+        if name not in wanted:
+            continue
+        tick = time.monotonic()
         with torch.no_grad():
             latent = pipe(
                 part_surface=batch["part_cond"][i : i + 1],
@@ -121,12 +129,14 @@ def main():
                 generator=torch.Generator(device="cuda").manual_seed(args.seed),
                 output_type="latent",
             ).samples
+            torch.cuda.synchronize()
+            sampled = time.monotonic()
             decoded = hierarchical_extract_geometry(
                 lambda x: pipe.vae.decode(latent[:1], sampled_points=x).sample,
                 "cuda",
                 bounds=(-1.05, -1.05, -1.05, 1.05, 1.05, 1.05),
                 dense_octree_depth=args.octree_depth,
-                hierarchical_octree_depth=args.octree_depth + 1,
+                hierarchical_octree_depth=args.refine_depth or args.octree_depth + 1,
             )
         pieces = [trimesh.Trimesh(v.astype(np.float32), f) for v, f in decoded if len(f)]
         if not pieces:
@@ -136,6 +146,8 @@ def main():
         mesh.apply_scale(batch["scales"][i])
         mesh.apply_translation(batch["centres"][i].numpy())
         source = scene.geometry[name]
+        # Fidelity: the completed solid must still cover the observed surface it was grown from.
+        gap, _ = cKDTree(mesh.sample(30000)).query(source.sample(5000))
         result.add_geometry(mesh, node_name=name, geom_name=name)
         report.append(
             {
@@ -146,6 +158,10 @@ def main():
                 "volume": float(abs(mesh.volume)) if mesh.is_watertight else None,
                 "source_area": float(source.area),
                 "completed_area": float(mesh.area),
+                "sample_seconds": round(sampled - tick, 1),
+                "decode_seconds": round(time.monotonic() - sampled, 1),
+                "source_gap_mean_rel": float(gap.mean() / diagonal),
+                "source_gap_p95_rel": float(np.percentile(gap, 95) / diagonal),
             }
         )
         print("PART_COMPLETED", i + 1, len(names), name, flush=True)
