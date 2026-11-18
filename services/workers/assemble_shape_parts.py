@@ -50,10 +50,16 @@ def as_primitive(mesh):
     from photo_part_evidence import decimate_mesh
 
     mesh = decimate_mesh(mesh, MAX_FACES)
+    mesh.update_faces(mesh.nondegenerate_faces())
+    mesh.remove_unreferenced_vertices()
     mesh.fix_normals()
+    # glTF requires unit normals; vertices left only on sliver faces can sum to a zero vector.
+    normals = np.asarray(mesh.vertex_normals, np.float64)
+    length = np.linalg.norm(normals, axis=1, keepdims=True)
+    normals = np.where(length > 1e-8, normals / np.maximum(length, 1e-12), [0.0, 1.0, 0.0])
     return {
         "vertices": np.asarray(mesh.vertices, np.float32),
-        "normals": np.asarray(mesh.vertex_normals, np.float32),
+        "normals": normals.astype(np.float32),
         "uvs": np.zeros((len(mesh.vertices), 2), np.float32),
         "faces": np.asarray(mesh.faces, np.uint32),
     }
