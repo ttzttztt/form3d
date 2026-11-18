@@ -234,6 +234,8 @@ def _physical(plan):
 
 def _plan_problem(plan):
     """None when the plan can be generated, otherwise a user-facing reason."""
+    if shape_first_ready():
+        return None  # parts come from the photo regions, not from the detector's kinds or counts
     physical = _physical(plan)
     unknown = [p for p in physical if p.get("kind") == "unknown"]
     kinds = {p.get("kind") for p in physical}

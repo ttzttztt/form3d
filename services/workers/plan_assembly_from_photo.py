@@ -27,6 +27,81 @@ PROMPTS = {
 }
 
 
+SHADOW_CHROMA = 18  # max-min of RGB; cast shadows on a white backdrop are nearly grey
+SHADOW_DARKEST = 0.55  # shadows are at least this bright relative to the backdrop
+MAX_FILLED_HOLE = 0.05  # enclosed holes up to this share of the object are filled (a white panel)
+SHADOW_TEXTURE = 4.0  # grey-level std in a 7x7 window; shadows are smooth
+OTHER_FURNITURE = {
+    "sofa": "chair. table. cabinet.",
+    "chair": "sofa. table. cabinet.",
+    "table": "chair. sofa. cabinet.",
+    "cabinet": "chair. sofa. table.",
+}
+
+
+def studio_foreground(product):
+    """Foreground of a photo on a plain light background, else None.
+
+    Pixels not connected to the background, minus soft cast shadows: smooth, colourless pixels
+    somewhat darker than the background (a shadow under a bench is not part of the bench).
+    """
+    import numpy as np
+    from local3d_preprocess import remove_product_background
+    from scipy import ndimage
+
+    try:
+        cut, method = remove_product_background(product.convert("RGB").convert("RGBA"), None, allow_model=False)
+    except ValueError:
+        return None
+    if method != "white_background_connected_components":
+        return None
+    foreground = np.asarray(cut.getchannel("A")) > 128
+    rgb = np.asarray(product.convert("RGB"), np.float32)
+    grey = rgb.mean(axis=2)
+    background = float(np.median(grey[~foreground])) if (~foreground).any() else 255.0
+    chroma = rgb.max(axis=2) - rgb.min(axis=2)
+    local_std = np.sqrt(np.maximum(ndimage.uniform_filter(grey**2, 7) - ndimage.uniform_filter(grey, 7) ** 2, 0))
+    shadow = (chroma < SHADOW_CHROMA) & (grey > SHADOW_DARKEST * background) & (local_std < SHADOW_TEXTURE)
+    return foreground & ~shadow
+
+
+def complete_with_studio_foreground(whole_mask, studio, box, exclude=None):
+    """Add the foreground pieces SAM left out of the whole-furniture mask (thin legs, bases, side units).
+
+    A box-prompted SAM mask often stops at the largest sub-part. On a plain background every
+    foreground component touching that mask belongs to the same object, except pixels in
+    `exclude` (other furniture beside it); without a SAM mask, components lying mostly inside
+    the detection box are used. Returns the SAM mask unchanged when nothing qualifies.
+    """
+    import numpy as np
+    from scipy import ndimage
+
+    if exclude is not None:
+        studio = studio & ~exclude
+    labels, count = ndimage.label(studio)
+    if not count:
+        return whole_mask
+    if whole_mask is not None:
+        keep = np.unique(labels[whole_mask & studio])
+    else:
+        x0, y0, x1, y1 = box
+        inside = np.bincount(labels[y0:y1, x0:x1].ravel(), minlength=count + 1)
+        total = np.bincount(labels.ravel(), minlength=count + 1)
+        keep = np.nonzero(inside >= 0.5 * np.maximum(total, 1))[0]
+    keep = keep[keep > 0]
+    if not len(keep):
+        return whole_mask
+    completed = np.isin(labels, keep)
+    if whole_mask is not None:
+        completed |= whole_mask
+    holes, count = ndimage.label(ndimage.binary_fill_holes(completed) & ~completed)
+    if count:  # small enclosed holes are pale surfaces the shadow test removed; large ones are openings
+        sizes = np.bincount(holes.ravel())
+        small = np.nonzero(sizes <= MAX_FILLED_HOLE * completed.sum())[0]
+        completed |= np.isin(holes, small[small > 0])
+    return completed
+
+
 def run(args):
     import cv2, numpy as np, torch
     from PIL import Image, ImageDraw
@@ -109,6 +184,7 @@ def run(args):
         proposals.extend({**r, "kind": kind} for r in detect(prompt))
         print("PART_PLANNING_DETECTED", kind, len(proposals), flush=True)
     clutter = detect("laptop. book. person. cat. potted plant.", 0.30)
+    neighbours = detect(OTHER_FURNITURE[args.category], 0.35)
     model = processor = None  # release GPU memory; detect() is not called after this
     gc.collect()
     torch.cuda.empty_cache()
@@ -157,10 +233,25 @@ def run(args):
                 inside = mask[y0:y1, x0:x1].sum() / max(mask.sum(), 1)
                 if float(score) >= 0.6 and inside >= 0.9:
                     whole_options.append((int(mask.sum()), float(score), mask))
-            if not whole_options:
+            studio = studio_foreground(product)
+            if not whole_options and studio is None:
                 raise ValueError("Whole furniture mask is uncertain")
-            whole_mask = max(whole_options, key=lambda r: r[0])[2]
+            whole_mask = max(whole_options, key=lambda r: r[0])[2] if whole_options else None
             whole_method = "local_furniture_detection_and_sam"
+            if studio is not None:
+                exclude = np.zeros(studio.shape, bool)
+                for other in neighbours:  # furniture beside the target, e.g. a chair at a desk
+                    if box_iou(other["box"], chosen["box"]) > 0.3:
+                        continue  # the target itself under another name
+                    a0, b0, a1, b1 = [int(round(v)) for v in other["box"]]
+                    exclude[max(b0, 0) : max(b1, 0), max(a0, 0) : max(a1, 0)] = True
+                exclude[y0:y1, x0:x1] = False
+                completed = complete_with_studio_foreground(whole_mask, studio, (x0, y0, x1, y1), exclude)
+                if completed is None:
+                    raise ValueError("Whole furniture mask is uncertain")
+                if whole_mask is None or completed.sum() > whole_mask.sum():
+                    whole_method += "+studio_foreground"
+                whole_mask = completed
         if whole_mask.sum() < 300:
             raise ValueError("Whole furniture mask is too small")
         for item in clutter:

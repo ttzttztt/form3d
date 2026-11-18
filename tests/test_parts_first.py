@@ -313,6 +313,14 @@ class PartsFirstTests(unittest.TestCase):
         self.assertEqual(fixed.status_code, 200, fixed.text)
         self.assertEqual(self.wait(job)["status"], "awaiting_review")
 
+    def test_shape_first_ignores_detector_kind_conflicts(self):
+        from services.api import parts_first
+
+        plan = {"status": "needs_review", "object_category": "table", "parts": [{"kind": "unknown"}]}
+        self.assertIn("冲突", parts_first._plan_problem(plan))
+        with patch("services.api.parts_first.shape_first_ready", return_value=True):
+            self.assertIsNone(parts_first._plan_problem(plan))
+
     def test_plan_missing_the_defining_part_is_not_built(self):
         workers = FakeWorkers(self.store, kinds=("leg", "leg"))
         job = self.wait(self.start(workers))
