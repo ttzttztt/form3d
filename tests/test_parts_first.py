@@ -201,6 +201,11 @@ class PartsFirstTests(unittest.TestCase):
             patcher = patch(target, return_value=READY)
             patcher.start()
             self.addCleanup(patcher.stop)
+        # These tests cover the plan / parametric / PartCrafter routes; the shape-first route is
+        # chosen only when its models are installed, which differs between machines.
+        patcher = patch("services.api.parts_first.shape_first_ready", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.application = create_app(self.temporary.name)
         self.client = TestClient(self.application)
         self.client.__enter__()

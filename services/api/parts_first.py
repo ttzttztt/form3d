@@ -60,7 +60,18 @@ PARTCRAFTER_STAGES = {
     "raw_candidates_ready": "原始部件已生成",
 }
 
-TIMEOUTS = {"plan": 900, "generate": 3600, "audit": 1800, "export": 1800, "parametric": 600}
+TIMEOUTS = {
+    "plan": 900,
+    "generate": 3600,
+    "audit": 1800,
+    "export": 1800,
+    "parametric": 600,
+    "shape": 1800,
+    "regions": 900,
+    "segment": 900,
+    "complete": 7200,
+    "assemble": 900,
+}
 
 # Must match services/workers/parametric_parts.HARD_KINDS (kept here so the API process does not
 # import worker code): these kinds are built or replaced as parametric boxes/cylinders.
@@ -92,6 +103,31 @@ def parts_python():
     return str(candidate.resolve()) if candidate.is_file() else None
 
 
+def holo_python():
+    configured = os.getenv("HOLO_PYTHON")
+    candidate = (
+        Path(configured)
+        if configured
+        else ROOT / ".venv-holo" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    )
+    return str(candidate.resolve()) if candidate.is_file() else None
+
+
+def shape_first_ready():
+    """Whole-shape generation + photo split + HoloPart: the default route when installed.
+
+    IMG3D_SHAPE_FIRST=0 switches back to the parametric / PartCrafter routes.
+    """
+    return (
+        os.getenv("IMG3D_SHAPE_FIRST", "1") == "1"
+        and bool(local_python("hunyuan-mini"))
+        and bool(holo_python())
+        and bool(segmentation_python())
+        and (ROOT / ".models" / "hunyuan3d-2mini").is_dir()
+        and (ROOT / ".models" / "holopart" / "model_index.json").is_file()
+    )
+
+
 def parts_first_status():
     """Report each prerequisite separately so the settings panel can say what is missing."""
     checks = {
@@ -114,6 +150,7 @@ def parts_first_status():
         # Furniture made only of hard parts needs no generator: plan + parametric build.
         "available": all(checks[name] for name in planner + geometry),
         "generator_available": all(checks[name] for name in generator),
+        "shape_first_available": shape_first_ready(),
         "checks": checks,
         "missing": [name for name, ok in checks.items() if not ok],
         "planner": "Grounding DINO Tiny + SAM 2.1 Hiera Tiny",
@@ -346,6 +383,8 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
             parts_plan=summary,
             parts_overlay_url=f"/api/jobs/{job_id}/files/parts_overlay.png",
         )
+    if shape_first_ready():
+        return _build_shape_first(store, job_id, runner, check_cancelled, root, image)
     plan = _read_json(plan_folder / "plan.json") or {}
     kinds = [p["kind"] for p in _physical(plan)]
     hard = HARD_KINDS.get(plan.get("object_category"), set())
@@ -360,6 +399,124 @@ def run_parts_first(store, job_id, directory, request, image, check_cancelled):
             + "、".join(status["missing"])
         )
     return _generate_and_assemble(store, job_id, directory, runner, check_cancelled, root, request.parts_parametric)
+
+
+def _build_shape_first(store, job_id, runner, check_cancelled, root, image):
+    """Generate the whole shape, split it by the photo's regions, complete each part as a solid.
+
+    Category-independent: no furniture rules decide the parts. Hidden geometry is generated and
+    marked as inferred; parts whose completion strays from the observed surface are thickened
+    surfaces flagged for review (assemble_shape_parts.py).
+    """
+    folder, plan = root / "shape_first", root / "plan"
+    if folder.exists():
+        folder.rename(folder.with_name(f"shape_first_superseded_{int(time.time() * 1000)}"))
+    folder.mkdir(parents=True)
+    hunyuan = local_python("hunyuan-mini")
+    store.event(job_id, "parts_shape", "整体生成：Hunyuan3D-2mini 从原图生成完整形状")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "shape",
+            [
+                hunyuan,
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "generate_hunyuan3d.py",
+                "--input",
+                plan / "generation_input.png",
+                "--output",
+                folder / "shape",
+                "--steps",
+                "30",
+                "--resolution",
+                "256",
+                "--keep-background",
+            ],
+            progress_path=folder / "shape" / "local_progress.json",
+        ),
+    )
+    store.event(job_id, "parts_regions", "在原图中按区域分割部件（SAM 2，不依赖品类规则）")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "regions",
+            [
+                segmentation_python(),
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "photo_regions.py",
+                "--plan",
+                plan,
+                "--output",
+                folder / "regions",
+            ],
+        ),
+    )
+    store.event(job_id, "parts_segment", "把原图分区对齐并投影到整体形状上")
+    runner.run(
+        "segment",
+        [
+            hunyuan,
+            "-X",
+            "utf8",
+            "-u",
+            WORKERS / "segment_shape_by_photo.py",
+            "--mesh",
+            folder / "shape" / "model.glb",
+            "--plan",
+            plan,
+            "--regions",
+            folder / "regions",
+            "--output",
+            folder / "segment",
+        ],
+    )
+    store.event(job_id, "parts_complete", "用 HoloPart 把每个部件补全为实体（隐藏部分为生成）")
+    _with_gpu(
+        check_cancelled,
+        lambda: runner.run(
+            "complete",
+            [
+                holo_python(),
+                "-X",
+                "utf8",
+                "-u",
+                WORKERS / "complete_parts_holopart.py",
+                "--input",
+                folder / "segment" / "segmented.glb",
+                "--output",
+                folder / "complete",
+            ],
+        ),
+    )
+    runner.run(
+        "assemble",
+        [
+            hunyuan,
+            "-X",
+            "utf8",
+            "-u",
+            WORKERS / "assemble_shape_parts.py",
+            "--plan",
+            plan,
+            "--image",
+            store.root / image["normalized_path"],
+            "--regions",
+            folder / "regions",
+            "--segmentation",
+            folder / "segment",
+            "--completion",
+            folder / "complete",
+            "--output",
+            folder / "assembly",
+        ],
+    )
+    return attach_assembly_candidate(
+        store, job_id, folder / "assembly", None, route="parts_first", pending_status="running"
+    )
 
 
 def _build_parametric(store, job_id, directory, runner, root):

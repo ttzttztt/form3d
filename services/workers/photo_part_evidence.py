@@ -32,7 +32,7 @@ def product_mask(original, references, source_folder, request):
         ]
         alpha = Image.open(segmented).convert("RGBA").getchannel("A")
         if alpha.size != (bounds[2] - bounds[0], bounds[3] - bounds[1]):
-            raise ValueError("æ•´ä»¶åˆ†å‰²ä¸Žå‚è€ƒåæ ‡ä¸ä¸€è‡´ï¼Œæœªè‡ªåŠ¨å¯¹åº”éƒ¨ä»¶")
+            raise ValueError("整件分割与参考坐标不一致，未自动对应部件")
         canvas = Image.new("L", product.size)
         canvas.paste(alpha, (bounds[0] - crop[0], bounds[1] - crop[1]))
         return np.asarray(canvas) > 128
@@ -47,14 +47,14 @@ def product_mask(original, references, source_folder, request):
             whole["file"] != "whole_product_mask.png"
             or hashlib.sha256(path.read_bytes()).hexdigest() != whole["sha256"]
         ):
-            raise ValueError("è¡¥å……è§†å›¾çš„æ•´ä»¶æŽ©ç å·²å˜åŒ–")
+            raise ValueError("补充视图的整件掩码已变化")
         alpha = np.asarray(Image.open(path).convert("L")) > 128
         if alpha.shape != np.asarray(product).shape[:2] or not alpha.any():
-            raise ValueError("è¡¥å……è§†å›¾æ•´ä»¶è½®å»“åæ ‡ä¸ä¸€è‡´")
+            raise ValueError("补充视图整件轮廓坐标不一致")
         return alpha
     cleaned, method = remove_product_background(product, None, allow_model=False)
     if method not in ("provided_alpha", "white_background_connected_components"):
-        raise ValueError("ç¼ºå°‘æ•´ä»¶å®¶å…·çš„å¯é è½®å»“ï¼Œè¯·å…ˆæ¸…ç†èƒŒæ™¯")
+        raise ValueError("缺少整件家具的可靠轮廓，请先清理背景")
     return np.asarray(cleaned.getchannel("A")) > 128
 
 
@@ -171,7 +171,7 @@ def rasterize(meshes, matrix, size, target=None, return_depth=False):
 def bbox(mask):
     yy, xx = np.nonzero(mask)
     if not len(xx):
-        raise ValueError("å‚è€ƒè½®å»“ä¸ºç©º")
+        raise ValueError("参考轮廓为空")
     return np.array([xx.min(), yy.min(), xx.max() + 1, yy.max() + 1], float)
 
 
@@ -264,7 +264,7 @@ def associate(meshes, camera, references, folder, target_group, projected_labels
     if not target.any():
         return {
             "status": "needs_confirmation",
-            "reason": "æ‰€é€‰éƒ¨ä»¶åœ¨åŽŸå›¾è§†è§’ä¸å¯è§ï¼Œä¸èƒ½è‡ªåŠ¨å¯¹åº”å‚è€ƒ",
+            "reason": "所选部件在原图视角不可见，不能自动对应参考",
         }, target
     rows = []
     for ref in references["candidates"]:
@@ -313,7 +313,7 @@ def associate(meshes, camera, references, folder, target_group, projected_labels
         )
     rows.sort(key=lambda row: (row["clean_mask"], row["iou"]), reverse=True)
     if not rows:
-        return {"status": "needs_confirmation", "reason": "å‚è€ƒç¼ºå°‘åŽŸå›¾ä½ç½®ï¼Œæ— æ³•è‡ªåŠ¨å¯¹åº”éƒ¨ä»¶"}, target
+        return {"status": "needs_confirmation", "reason": "参考缺少原图位置，无法自动对应部件"}, target
     best = rows[0]
     # Compare different detected instances, not near-duplicate SAM variants.
     alternatives = [row["iou"] for row in rows if row["clean_mask"] and mask_iou(row["mask"], best["mask"]) < 0.25]
@@ -332,7 +332,7 @@ def associate(meshes, camera, references, folder, target_group, projected_labels
         "projected_core_area_retained": retained,
         "partial_surface_support": partial and best["iou"] < 0.45,
         "mask_quality": best["mask_quality"],
-        "reason": "åŽŸå›¾ä½ç½®ä¸Žå¯è§è½®å»“å¯¹åº”" if reliable else "ä½ç½®æˆ–è½®å»“è¯æ®ä¸è¶³ï¼Œæœªè‡ªåŠ¨æŒ‡å®šå‚è€ƒ",
+        "reason": "原图位置与可见轮廓对应" if reliable else "位置或轮廓证据不足，未自动指定参考",
         "scores_are_not_accuracy": True,
         "ranking": [{k: row[k] for k in ("id", "iou", "detection", "clean_mask")} for row in rows],
     }, target
@@ -345,14 +345,14 @@ def alpha_polygon(path, crop=None, minimum_area=100):
     mask = np.asarray(image.getchannel("A")) > 128
     filled = binary_fill_holes(mask)
     if (filled & ~mask).sum() / max(filled.sum(), 1) > 0.06:
-        raise ValueError("å‚è€ƒæŽ©ç å«è¾ƒå¤§ç¼ºå£ï¼Œä¸èƒ½ä½œä¸ºå®Œæ•´éƒ¨ä»¶è½®å»“")
+        raise ValueError("参考掩码含较大缺口，不能作为完整部件轮廓")
     mask = cv2.GaussianBlur(mask.astype("float32"), (0, 0), 0.8) > 0.5
     contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        raise ValueError("éƒ¨ä»¶å‚è€ƒè½®å»“ä¸ºç©º")
+        raise ValueError("部件参考轮廓为空")
     contour = max(contours, key=cv2.contourArea)
     if cv2.contourArea(contour) < minimum_area:
-        raise ValueError("éƒ¨ä»¶å‚è€ƒè½®å»“è¿‡å°")
+        raise ValueError("部件参考轮廓过小")
     contour = cv2.approxPolyDP(contour, max(1.0, max(mask.shape) * 0.006), True)[:, 0].astype(float)
     if crop is not None:
         contour += np.asarray(crop[:2])
@@ -369,7 +369,7 @@ def unproject_to_plane(pixels, matrix, center, axes):
         a = np.array([[x[0] - u * x[2], y[0] - u * y[2]], [x[1] - v * x[2], y[1] - v * y[2]]])
         b = np.array([u * c[2] - c[0], v * c[2] - c[1]])
         if np.linalg.cond(a) > 1000:
-            raise ValueError("å‚è€ƒè§†è§’è¿‡äºŽä¾§å‘ï¼Œä¸èƒ½å¯é æ¢å¤éƒ¨ä»¶è½®å»“")
+            raise ValueError("参考视角过于侧向，不能可靠恢复部件轮廓")
         output.append(np.linalg.solve(a, b))
     return np.asarray(output)
 
@@ -392,12 +392,12 @@ def constrain_to_photo_rays(mesh, matrix, center, axes, maximum_shift):
     a = np.stack([np.c_[x[0] - u * x[2], y[0] - u * y[2]], np.c_[x[1] - v * x[2], y[1] - v * y[2]]], axis=1)
     b = np.c_[u * homogeneous[:, 2] - homogeneous[:, 0], v * homogeneous[:, 2] - homogeneous[:, 1]]
     if np.max(np.linalg.cond(a)) > 1000:
-        raise ValueError("éƒ¨ä»¶ä¾§å‘è¿‡å¼ºï¼Œæ— æ³•ç¨³å®šçº¦æŸç…§ç‰‡è½®å»“")
+        raise ValueError("部件侧向过强，无法稳定约束照片轮廓")
     coordinates = np.linalg.solve(a, b[:, :, None])[:, :, 0]
     vertices = shifted + coordinates @ axes[:, :2].T
     displacement = np.linalg.norm(vertices - mesh.vertices, axis=1)
     if displacement.max() > maximum_shift:
-        raise ValueError("åŽŸå›¾è½®å»“è¦æ±‚çš„ä¸‰ç»´ç§»åŠ¨è¿‡å¤§ï¼Œæœªè‡ªåŠ¨å˜å½¢")
+        raise ValueError("原图轮廓要求的三维移动过大，未自动变形")
     result = mesh.copy()
     result.vertices = vertices
     return result, {

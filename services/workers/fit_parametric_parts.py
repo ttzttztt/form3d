@@ -49,6 +49,113 @@ def add_primitive(doc, binary, mesh):
     }
 
 
+def write_assembly(
+    output,
+    plan,
+    physical,
+    meshes,
+    *,
+    generator,
+    root_name,
+    group_kind,
+    note,
+    source_engine,
+    sources,
+    fit,
+    method,
+    assumptions,
+    notes=None,
+):
+    """Write model.glb, plan.json and assembly.json in the format attach_assembly_candidate checks.
+
+    meshes: {part_id: {vertices, normals, uvs, faces}} for every physical part.
+    """
+    import numpy as np
+    from services.api.assembly_models import AssemblyPlan
+    from services.api.glb_document import write_glb
+
+    notes = notes or {}
+    doc = {
+        "asset": {"version": "2.0", "generator": generator},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": root_name, "children": [], "extras": {"assembly_plan_id": plan.id}}],
+        "meshes": [],
+        "materials": [],
+        "buffers": [{"byteLength": 0}],
+    }
+    binary = bytearray()
+    nodes = {}
+    for part in plan.parts:
+        nodes[part.id] = len(doc["nodes"])
+        doc["nodes"].append(
+            {"name": part.name, "extras": {"assembly_part_id": part.id, "geometry_role": part.geometry_role}}
+        )
+    for index, part in enumerate(physical):
+        primitive = add_primitive(doc, binary, meshes[part.id])
+        primitive["material"] = len(doc["materials"])
+        doc["materials"].append(
+            {
+                "name": part.name + " · 中性检查材质",
+                "pbrMetallicRoughness": {
+                    "baseColorFactor": PALETTE[index % 3],
+                    "metallicFactor": 0,
+                    "roughnessFactor": 0.8,
+                },
+            }
+        )
+        primitive["extras"] = {
+            "form_logical_group_id": part.id,
+            "form_part_name": part.name,
+            "form_semantic_kind": part.kind,
+            "form_group_kind": group_kind,
+            "form_proposal_status": "needs_review",
+            "form_completion_note": notes.get(part.id, note),
+        }
+        doc["nodes"][nodes[part.id]]["mesh"] = len(doc["meshes"])
+        doc["meshes"].append({"name": part.name, "primitives": [primitive]})
+        primitive_id = part.id + "__geometry"
+        doc["nodes"][nodes[part.id]]["extras"]["form_part_ids"] = {"0": primitive_id}
+        vertices = meshes[part.id]["vertices"]
+        part.status, part.primitive_ids, part.hidden_surface_status = "ready", [primitive_id], "inferred"
+        part.bounds_world = [vertices.min(0).tolist(), vertices.max(0).tolist()]
+    for part in plan.parts:
+        parent = nodes[part.parent_id] if part.parent_id else 0
+        doc["nodes"][parent].setdefault("children", []).append(nodes[part.id])
+        if part.geometry_role == "structural_group":
+            part.status = "ready"
+    output.mkdir(parents=True, exist_ok=True)
+    write_glb(output / "model.glb", doc, binary)
+    model_sha = digest(output / "model.glb")
+    for part in physical:
+        part.model_sha256 = model_sha
+    everything = np.vstack([m["vertices"] for m in meshes.values()])
+    plan.status, plan.overall_bounds_world = (
+        "ready_for_review",
+        [everything.min(0).tolist(), everything.max(0).tolist()],
+    )
+    plan = AssemblyPlan.model_validate(plan.model_dump())
+    write(output / "plan.json", plan.model_dump())
+    write(
+        output / "assembly.json",
+        {
+            "status": "candidate_ready_for_review",
+            "source_engine": source_engine,
+            **sources,
+            "model_sha256": model_sha,
+            "part_ids": [p.id for p in physical],
+            **fit,
+            "contacts": [],
+            "placement_hypotheses": [{"method": method, "assumptions": assumptions}],
+            "materials": "independent_neutral_diagnostic_materials_not_recovered_textures",
+            "semantic_assignment_verified": False,
+            "physical_structure_verified": False,
+            "appearance_accepted": False,
+            "complete_assembly_accepted": False,
+        },
+    )
+
+
 def from_plan(args):
     import numpy as np
     from PIL import Image
@@ -94,96 +201,34 @@ def from_plan(args):
             }
             for item in inputs
         }
-        assumptions = assumptions + [f"æ¨¡åž‹è½®å»“ä¸Žç…§ç‰‡è½®å»“é‡åˆåº¦ {cabinet['reprojection_iou']:.2f}"]
+        assumptions = assumptions + [f"模型轮廓与照片轮廓重合度 {cabinet['reprojection_iou']:.2f}"]
         method = "two_point_perspective_front_layout"
     else:
         meshes, assumptions, parameters = layout_from_masks(plan.object_category, inputs, load("whole_mask.png"))
 
-    doc = {
-        "asset": {"version": "2.0", "generator": "img_to3D parametric parts"},
-        "scene": 0,
-        "scenes": [{"nodes": [0]}],
-        "nodes": [
-            {"name": "å®¶å…·è£…é…ï¼ˆå‚æ•°åŒ–ï¼Œéœ€æ£€æŸ¥ï¼‰", "children": [], "extras": {"assembly_plan_id": plan.id}}
-        ],
-        "meshes": [],
-        "materials": [],
-        "buffers": [{"byteLength": 0}],
-    }
-    binary = bytearray()
-    nodes = {}
-    for part in plan.parts:
-        nodes[part.id] = len(doc["nodes"])
-        doc["nodes"].append(
-            {"name": part.name, "extras": {"assembly_part_id": part.id, "geometry_role": part.geometry_role}}
-        )
-    for index, part in enumerate(physical):
-        primitive = add_primitive(doc, binary, meshes[part.id])
-        primitive["material"] = len(doc["materials"])
-        doc["materials"].append(
-            {
-                "name": part.name + " Â· ä¸­æ€§æ£€æŸ¥æè´¨",
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": PALETTE[index % 3],
-                    "metallicFactor": 0,
-                    "roughnessFactor": 0.8,
-                },
-            }
-        )
-        primitive["extras"] = {
-            "form_logical_group_id": part.id,
-            "form_part_name": part.name,
-            "form_semantic_kind": part.kind,
-            "form_group_kind": "parametric_part",
-            "form_proposal_status": "needs_review",
-            "form_completion_note": "æŒ‰åŽŸå›¾æŽ©ç ä¸Žå“ç±»å…ˆéªŒæ‹Ÿåˆçš„å‚æ•°åŒ–æž„ä»¶ï¼›æ·±åº¦ä¸Žéšè—ç»“æž„æœªéªŒè¯",
-        }
-        doc["nodes"][nodes[part.id]]["mesh"] = len(doc["meshes"])
-        doc["meshes"].append({"name": part.name, "primitives": [primitive]})
-        primitive_id = part.id + "__geometry"
-        doc["nodes"][nodes[part.id]]["extras"]["form_part_ids"] = {"0": primitive_id}
-        vertices = meshes[part.id]["vertices"]
-        part.status, part.primitive_ids, part.hidden_surface_status = "ready", [primitive_id], "inferred"
-        part.bounds_world = [vertices.min(0).tolist(), vertices.max(0).tolist()]
-    for part in plan.parts:
-        parent = nodes[part.parent_id] if part.parent_id else 0
-        doc["nodes"][parent].setdefault("children", []).append(nodes[part.id])
-        if part.geometry_role == "structural_group":
-            part.status = "ready"
-    output.mkdir(parents=True)
-    write_glb(output / "model.glb", doc, binary)
-    model_sha = digest(output / "model.glb")
-    for part in physical:
-        part.model_sha256 = model_sha
-    everything = np.vstack([m["vertices"] for m in meshes.values()])
-    plan.status, plan.overall_bounds_world = (
-        "ready_for_review",
-        [everything.min(0).tolist(), everything.max(0).tolist()],
-    )
-    plan = AssemblyPlan.model_validate(plan.model_dump())
-    write(output / "plan.json", plan.model_dump())
-    write(
-        output / "assembly.json",
-        {
-            "status": "candidate_ready_for_review",
-            "source_engine": "parametric_from_masks",
+    write_assembly(
+        output,
+        plan,
+        physical,
+        meshes,
+        generator="img_to3D parametric parts",
+        root_name="家具装配（参数化，需检查）",
+        group_kind="parametric_part",
+        note="按原图掩码与品类先验拟合的参数化构件；深度与隐藏结构未验证",
+        source_engine="parametric_from_masks",
+        sources={
             "source_plan_sha256": digest(folder / "plan.json"),
             "source_observations_sha256": digest(folder / "observations.json"),
-            "model_sha256": model_sha,
-            "part_ids": [p.id for p in physical],
+        },
+        fit={
             "parametric_fit": {
                 "mode": "from_masks",
                 "assumptions": assumptions,
                 "parts": [{"part_id": pid, **value} for pid, value in parameters.items()],
-            },
-            "contacts": [],
-            "placement_hypotheses": [{"method": method, "assumptions": assumptions}],
-            "materials": "independent_neutral_diagnostic_materials_not_recovered_textures",
-            "semantic_assignment_verified": False,
-            "physical_structure_verified": False,
-            "appearance_accepted": False,
-            "complete_assembly_accepted": False,
+            }
         },
+        method=method,
+        assumptions=assumptions,
     )
     print("PARAMETRIC_ASSEMBLY_BUILT", len(physical), flush=True)
 
@@ -227,7 +272,7 @@ def refine(args):
             primitive["attributes"].pop("TANGENT", None)
             primitive.setdefault("extras", {}).update(
                 form_group_kind="parametric_part",
-                form_completion_note="AI éƒ¨ä»¶å·²æ›¿æ¢ä¸ºæ‹Ÿåˆçš„å‚æ•°åŒ–æž„ä»¶ï¼›åå·®è§ assembly.json",
+                form_completion_note="AI 部件已替换为拟合的参数化构件；偏差见 assembly.json",
             )
         else:
             row["reason"] = "deviation_above_threshold"
