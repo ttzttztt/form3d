@@ -315,6 +315,42 @@ def run(args):
     for item in accepted:
         if item.get("kind_evidence"):
             item["kind"], item["kind_resolution"] = resolve_kind(item["kind_evidence"], item["mask"], whole_mask)
+    cabinet_layout = None
+    if args.category == "cabinet":
+        # Cabinets: perspective + front-layout analysis replaces the open-vocabulary detector parts,
+        # which miss shelves and invent doors. The detector result is kept in the audit.
+        import cabinet_geometry
+
+        try:
+            geometry, cells, built, assumptions, iou = cabinet_geometry.analyse(
+                np.asarray(product.convert("RGB")), whole_mask
+            )
+            if iou < cabinet_geometry.MIN_REPROJECTION_IOU:
+                raise ValueError(f"reprojection IoU {iou:.2f} below {cabinet_geometry.MIN_REPROJECTION_IOU}")
+            masks = cabinet_geometry.part_masks(geometry, built, whole_mask.shape)
+            replaced = [i["kind"] for i in accepted]
+            accepted = [
+                {
+                    "kind": part["kind"],
+                    "mask": mask & cabinet_geometry.filled(whole_mask) if seen == "partial" else mask,
+                    "layout_part_id": part["id"],
+                    "layout_name": part["name"],
+                    "visibility": seen,
+                    "hidden_structure_inferred": part["inferred"],
+                }
+                for part, (mask, seen) in zip(built, masks)
+                if mask.any()
+            ]
+            cabinet_layout = {
+                "method": "two_point_perspective_front_layout",
+                "geometry": json.loads(json.dumps(geometry, default=float)),
+                "cells": cells,
+                "assumptions": assumptions,
+                "reprojection_iou": iou,
+            }
+            write(folder / "cabinet_geometry.json", cabinet_layout)
+        except ValueError as exc:
+            cabinet_layout = {"error": str(exc)}
     foreground = product.convert("RGBA")
     foreground.putalpha(Image.fromarray(whole_mask.astype("uint8") * 255))
     foreground.save(folder / "generation_input.png")
@@ -370,6 +406,8 @@ def run(args):
             "parts": records,
             "rejected": rejected,
             "detection_audit": detection_audit,
+            "cabinet_layout": cabinet_layout
+            and {k: cabinet_layout[k] for k in ("method", "reprojection_iou", "error") if k in cabinet_layout},
             "clutter": clutter_records,
             "detected_furniture_candidates": len(whole),
             "scores_are_accuracy": False,

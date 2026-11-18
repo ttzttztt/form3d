@@ -75,14 +75,37 @@ def from_plan(args):
         row = rows[part.observations[0].mask_sha256]
         if digest(folder / row["mask_file"]) != row["mask_sha256"]:
             raise ValueError("A part mask changed after planning")
-        inputs.append({"id": part.id, "kind": part.kind, "mask": load(row["mask_file"])})
-    meshes, assumptions, parameters = layout_from_masks(plan.object_category, inputs, load("whole_mask.png"))
+        inputs.append({"id": part.id, "kind": part.kind, "mask": load(row["mask_file"]), "row": row})
+    cabinet = folder / "cabinet_geometry.json"
+    cabinet = json.loads(cabinet.read_text(encoding="utf-8")) if cabinet.is_file() else {}
+    method = "mask_layout_with_depth_prior"
+    if "geometry" in cabinet and all(item["row"].get("layout_part_id") for item in inputs):
+        # Measured perspective and front layout (cabinet_geometry.py); the plan may have been edited,
+        # so only parts still in the plan are built, each from its own layout record.
+        from cabinet_geometry import build
+
+        built, assumptions = build(cabinet["geometry"], cabinet["cells"])
+        by_id = {p["id"]: p for p in built}
+        meshes = {item["id"]: by_id[item["row"]["layout_part_id"]]["mesh"] for item in inputs}
+        parameters = {
+            item["id"]: {
+                "layout_part_id": item["row"]["layout_part_id"],
+                "hidden_structure_inferred": by_id[item["row"]["layout_part_id"]]["inferred"],
+            }
+            for item in inputs
+        }
+        assumptions = assumptions + [f"æ¨¡åž‹è½®å»“ä¸Žç…§ç‰‡è½®å»“é‡åˆåº¦ {cabinet['reprojection_iou']:.2f}"]
+        method = "two_point_perspective_front_layout"
+    else:
+        meshes, assumptions, parameters = layout_from_masks(plan.object_category, inputs, load("whole_mask.png"))
 
     doc = {
         "asset": {"version": "2.0", "generator": "img_to3D parametric parts"},
         "scene": 0,
         "scenes": [{"nodes": [0]}],
-        "nodes": [{"name": "家具装配（参数化，需检查）", "children": [], "extras": {"assembly_plan_id": plan.id}}],
+        "nodes": [
+            {"name": "å®¶å…·è£…é…ï¼ˆå‚æ•°åŒ–ï¼Œéœ€æ£€æŸ¥ï¼‰", "children": [], "extras": {"assembly_plan_id": plan.id}}
+        ],
         "meshes": [],
         "materials": [],
         "buffers": [{"byteLength": 0}],
@@ -99,7 +122,7 @@ def from_plan(args):
         primitive["material"] = len(doc["materials"])
         doc["materials"].append(
             {
-                "name": part.name + " · 中性检查材质",
+                "name": part.name + " Â· ä¸­æ€§æ£€æŸ¥æè´¨",
                 "pbrMetallicRoughness": {
                     "baseColorFactor": PALETTE[index % 3],
                     "metallicFactor": 0,
@@ -113,7 +136,7 @@ def from_plan(args):
             "form_semantic_kind": part.kind,
             "form_group_kind": "parametric_part",
             "form_proposal_status": "needs_review",
-            "form_completion_note": "按原图掩码与品类先验拟合的参数化构件；深度与隐藏结构未验证",
+            "form_completion_note": "æŒ‰åŽŸå›¾æŽ©ç ä¸Žå“ç±»å…ˆéªŒæ‹Ÿåˆçš„å‚æ•°åŒ–æž„ä»¶ï¼›æ·±åº¦ä¸Žéšè—ç»“æž„æœªéªŒè¯",
         }
         doc["nodes"][nodes[part.id]]["mesh"] = len(doc["meshes"])
         doc["meshes"].append({"name": part.name, "primitives": [primitive]})
@@ -154,7 +177,7 @@ def from_plan(args):
                 "parts": [{"part_id": pid, **value} for pid, value in parameters.items()],
             },
             "contacts": [],
-            "placement_hypotheses": [{"method": "mask_layout_with_depth_prior", "assumptions": assumptions}],
+            "placement_hypotheses": [{"method": method, "assumptions": assumptions}],
             "materials": "independent_neutral_diagnostic_materials_not_recovered_textures",
             "semantic_assignment_verified": False,
             "physical_structure_verified": False,
@@ -204,7 +227,7 @@ def refine(args):
             primitive["attributes"].pop("TANGENT", None)
             primitive.setdefault("extras", {}).update(
                 form_group_kind="parametric_part",
-                form_completion_note="AI 部件已替换为拟合的参数化构件；偏差见 assembly.json",
+                form_completion_note="AI éƒ¨ä»¶å·²æ›¿æ¢ä¸ºæ‹Ÿåˆçš„å‚æ•°åŒ–æž„ä»¶ï¼›åå·®è§ assembly.json",
             )
         else:
             row["reason"] = "deviation_above_threshold"

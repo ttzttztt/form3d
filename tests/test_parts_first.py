@@ -88,7 +88,11 @@ class FakeWorkers:
             self.write_plan(root / "plan", command)
         elif name == "generate" and self.decode_failures:
             self.decode_failures -= 1
-            facts = {"status": "failed", "error": "Some native part slots failed to decode", "vram_profile": {"name": "low"}}
+            facts = {
+                "status": "failed",
+                "error": "Some native part slots failed to decode",
+                "vram_profile": {"name": "low"},
+            }
             (root / "raw" / "generation.json").write_text(json.dumps(facts), encoding="utf-8")
             raise ValueError("部件优先流程「generate」阶段失败：Some native part slots failed to decode")
         elif name == "generate" and self.oom_profiles:
