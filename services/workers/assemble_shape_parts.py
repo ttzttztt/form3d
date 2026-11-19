@@ -114,12 +114,19 @@ def main():
             "segment": name,
         }
 
+    def region_mask(name):
+        return np.asarray(Image.open(regions_folder / regions[name]["mask_file"]).convert("L")) > 127
+
+    merged = segmentation.get("merged_smooth_seams", {})  # regions joined across smooth surface
     records, region_union = [], np.zeros(whole.shape, bool)
     for row in segmentation["parts"]:
         name = row["part_id"]
         if not row.get("faces") or name == BODY:
             continue
-        mask = np.asarray(Image.open(regions_folder / regions[name]["mask_file"]).convert("L")) > 127
+        mask = region_mask(name)
+        for absorbed in merged.get(name, []):
+            if absorbed != BODY:
+                mask |= region_mask(absorbed)
         region_union |= mask
         kind = regions[name]["kind"]
         records.append(record(name, "other" if kind in ("part", "unknown") else kind, mask))

@@ -16,6 +16,7 @@ Hidden-face labels are inferred, and recorded as such.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -37,6 +38,9 @@ SPLIT_SHARE = 0.1  # a region keeps per-face labels when its second label has th
 GROOVE_DEGREES = 15.0  # neighbour pull falls off with the angle between faces
 SMOOTH_ROUNDS = 12
 DATA_WEIGHT = 1.5  # photo evidence vs. neighbour agreement (3 neighbours per face)
+SEAM_DEGREES = float(os.getenv("IMG3D_SEAM_DEGREES", "20"))  # a groove/crease within two faces of the border
+SMOOTH_SEAM = float(os.getenv("IMG3D_SMOOTH_SEAM", "0.3"))  # borders with fewer sharp edges than this merge
+MIN_SEAM_EDGES = 6  # parts touching along fewer edges are left alone
 BODY = "__body__"
 
 
@@ -156,7 +160,47 @@ def label_faces(mesh, ids, part_masks, whole):
             ]
             if len(border):
                 labels[members] = np.bincount(labels[border], minlength=len(names)).argmax()
-    return [names[k] for k in labels], visible
+    labels, merged = merge_smooth_seams(mesh, labels, len(names))
+    merged = {names[keep]: [names[k] for k in gone] for keep, gone in merged.items()}
+    return [names[k] for k in labels], visible, merged
+
+
+def merge_smooth_seams(mesh, labels, count):
+    """Merge neighbouring parts whose shared border runs over smooth surface.
+
+    Photo regions also follow colour and print (a patterned band on a plain stool). A physical
+    part boundary is a groove, crease or step in the generated surface; a border that crosses
+    continuous surface is decoration. Sharpness is taken over a two-face ring, since borders settle
+    next to grooves rather than exactly on them. Returns (labels, {kept: [absorbed, ...]}).
+    """
+    pairs, angles = mesh.face_adjacency, mesh.face_adjacency_angles
+    sharp = np.zeros(len(labels))
+    np.maximum.at(sharp, pairs[:, 0], angles)
+    np.maximum.at(sharp, pairs[:, 1], angles)
+    for _ in range(2):
+        grown = sharp.copy()
+        np.maximum.at(grown, pairs[:, 0], sharp[pairs[:, 1]])
+        np.maximum.at(grown, pairs[:, 1], sharp[pairs[:, 0]])
+        sharp = grown
+    edge_sharp = np.maximum(sharp[pairs[:, 0]], sharp[pairs[:, 1]]) > np.radians(SEAM_DEGREES)
+    labels, merged = labels.copy(), {}
+    while True:
+        a, b = labels[pairs[:, 0]], labels[pairs[:, 1]]
+        cross = a != b
+        if not cross.any():
+            break
+        key = np.minimum(a, b)[cross] * count + np.maximum(a, b)[cross]
+        keys, inverse, edges = np.unique(key, return_inverse=True, return_counts=True)
+        share = np.bincount(inverse, weights=edge_sharp[cross]) / edges
+        candidates = np.flatnonzero((share < SMOOTH_SEAM) & (edges >= MIN_SEAM_EDGES))
+        if not len(candidates):
+            break
+        best = candidates[np.argmin(share[candidates])]
+        x, y = divmod(int(keys[best]), count)
+        keep, gone = (x, y) if (labels == x).sum() >= (labels == y).sum() else (y, x)
+        labels[labels == gone] = keep
+        merged.setdefault(keep, []).extend([gone, *merged.pop(gone, [])])
+    return labels, merged
 
 
 def main():
@@ -198,7 +242,7 @@ def main():
             if p.get("geometry_role", "physical_part") == "physical_part" and p.get("observations")
         ]
         masks = {p["id"]: load(rows[p["observations"][0]["mask_sha256"]]["mask_file"]) & whole for p in parts}
-    labels, visible = label_faces(mesh, ids, masks, whole)
+    labels, visible, merged = label_faces(mesh, ids, masks, whole)
 
     labels = np.asarray(labels)
     scene, report = trimesh.Scene(), []
@@ -233,6 +277,7 @@ def main():
                 "label_faces": len(mesh.faces),
                 "parts": report,
                 "hidden_labels_inferred": True,
+                "merged_smooth_seams": merged,
             },
             ensure_ascii=False,
             indent=2,
